@@ -12,38 +12,34 @@ There are three key pieces of code in the package:
 
 ### Galaxies
 The galaxies class allows for the storing of entire galaxies and their properties into a single data type.
-Suppose we have a galaxy `test01` with RA and declination (195$\rm ^o$, 28$\rm ^o$), and with absolute magnitude -18.0 and redshift $c \cdot z = 5000$ km s$^{-1}$. We can then initialize the galaxy to `x` as
+Suppose we have a galaxy `test01` with RA and declination (195, 28) degrees, and with absolute magnitude -18.0 and redshift 5000 km/s. We can then initialize the galaxy to `x` as
 ```
 import foftools as fof
 x = fof.galaxy("test01", 195, 28, 5000, -18.0)
 ```
 We can also pass a boolean flag to each galaxy for various purposes under the property `fof.galaxy.fl`. The group ID number for a galaxy defaults to zero, as it assumes that galaxies have not yet been sorted into groups, but this can also be initialized through the `fof.galaxy.groupID` property. The defined attributes of the class are:
--  `fof.galaxy.phi`: the azimuthal coordinate $\phi$ of the galaxy (in radians) in a spherical-polar coordinate system.
--  `fof.galaxy.theta`: the polar coordinate $\theta$ of the galaxy (in radians) in a spherical-polar coordinate system. It is calculated as $\theta = \frac{\pi}{2} - {\rm dec}$.
-- `fof.galaxy.x`: the angular x-component $x = \sin\theta\cos\phi$ of the galaxy's sky location.
-- `fof.galaxy.y`: the angular y-component $y = \sin\theta\sin\phi$ of the galaxy's sky location.
-- `fof.galaxy.z`: the angular z-component $z = \cos\theta$ of the galaxy's sky location.
+-  `fof.galaxy.phi`: the azimuthal coordinate of the galaxy (in radians) in a spherical-polar coordinate system.
+-  `fof.galaxy.theta`: the polar coordinate of the galaxy (in radians) in a spherical-polar coordinate system.
+- `fof.galaxy.x`: the angular x-component of the galaxy's sky location.
+- `fof.galaxy.y`: the angular y-component of the galaxy's sky location.
+- `fof.galaxy.z`: the angular z-component of the galaxy's sky location.
 
 The galaxy class also includes the following methods:
 - `fof.galaxy.get_groupID()`: return the groupID of the galaxy. The convention of the code is that a group ID of zero indicates the galaxy is not yet associated to any group whatsoever.
 - `fof.galaxy.set_groupID(groupID)`: redefine the group ID of the galaxy to the value of `groupID`.
 
 ### The Friends-of-Friends Algorithm
-We sort groups of galaxies following the process described in Berlind et al. (2006). In this approach, two galaxies are considered friends if the distances between them satisfy
-$$ D_\perp \leq b_\perp s $$
-and
-$$ D_{||} \leq b_{||} s$$
-where $b_\perp$ and $b_{||}$ are the perpendicular and line-of-sight linking factors, and $s$ is the mean separation between galaxies, computed as 
-$$ s = \left(\frac{N}{V}\right)^{-1/3}. $$
+We sort groups of galaxies following the process described in Berlind et al. (2006). In this approach, two galaxies are considered friends if the perpendicular and line-of-sight distances between them are each less than a characteristic linking length. The perpendicular and line-of-sight linking lengths are products of the mean separation between galaxies with the perpendicular and line-of-sight linking factors.
+
 The choice of linking factor is dependent on survey and can be optimized for different statistical purposes. For example, a flux-limited galaxy survey may require linking factors that are redshift-dependent (cf. Liu et al. 2008). However, since RESOLVE and ECO are volume-limited, our code is written to assume the linking factors to be completely constant. However, the `foftools` module can be easily modified to meet other purposes.
 
 Our implementation of the FoF algorithm is the `fof.galaxy_fof` function. It can be called as
 ```
 fof.galaxy_fof(gxs, bperp, blos, s)
 ```
-where `bperp` is $b_\perp$, `blos` is $b_{||}$, and $s$ is the mean separation, each as described above. The argument `gxs` is a list of galaxies (instances of the `fof.galaxy` class) on which to perform the group-finding. **Therefore, the `gxs` array must be prepared in advance of using the FoF algorithm to meet the luminosity-floor and bounding $cz$ values required by the sample.** The function returns nothing; instead, it identifies unique groups of galaxies and assigns each galaxy the appropriate group ID number. Afterwards, it distinguishes those galaxies that were not found to be in nonsingular groups and gives them a unique ID number. These are called "single-galaxy groups." After the code is finished, it will print a confirmation, and each galaxy in `gxs` will have a non-zero group ID number.
+where `bperp` is the perpendicular linking factor, `blos` is the line-of-sight linking factor, and `s` is the mean separation, each as described above. The argument `gxs` is a list of galaxies (instances of the `fof.galaxy` class) on which to perform the group-finding. **Therefore, the `gxs` array must be prepared in advance of using the FoF algorithm to meet the luminosity-floor and bounding redshift values required by the sample.** The function returns nothing; instead, it identifies unique groups of galaxies and assigns each galaxy the appropriate group ID number. Afterwards, it distinguishes those galaxies that were not found to be in nonsingular groups and gives them a unique ID number. These are called "single-galaxy groups." After the code is finished, it will print a confirmation, and each galaxy in `gxs` will have a non-zero group ID number.
 
-**Note: The FoF algorithm will run helper functions for calculating the perpendicular and line-of-sight distances betweeng galaxies. These functions assume a simple Hubble's law cosmology with $H_0 = 100$ km/s.**
+**Note: The FoF algorithm will run helper functions for calculating the perpendicular and line-of-sight distances betweeng galaxies. These functions assume a simple Hubble's law cosmology with H_0 = 100 km/s.**
 
 
 ### Groups
@@ -62,8 +58,8 @@ There is a built-in function to do this; see `fof.find_group` and `fof.galaxy_to
 The only other attributes of the group class are `fof.group.members`, a list of galaxies in that group, and `fof.group.n`, the size of the group in number of galaxies. To add a member to the group, always use `group.add_member(...)` and **do not use `fof.group.members.append(...)` as this will not update the `group.n` property.**
 
 Other methods of the group class include:
-- `fof.group.get_skycoords()`: return the central ($\phi$, $\theta$) values for the group.
-- `fof.group.get_cen_cz()`: return the central redshift $cz$ value for the group.
+- `fof.group.get_skycoords()`: return the central (phi, theta) values for the group.
+- `fof.group.get_cen_cz()`: return the central redshift (cz) value for the group.
 - `fof.group.get_total_mag()`: return the group total absolute magnitude.
 - `fof.group.get_proj_radius()`: return the projected radius of the group.
 - `fof.group.get_cz_disp()`: return the velocity dispersion of the group's members.

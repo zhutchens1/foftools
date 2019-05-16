@@ -1,7 +1,7 @@
 # foftools - galaxy group identification using the friends-of-friends algorithm.
 
 
-This package was written to include a variety of computational tools for performing friends-of-friends group identification analyses, especially as related to the RESOLVE/ECO surveys (Kannappan et al. 2011, Moffett et al. 2015). Thus, the following tools are best suited in applications to volume-limited surveys with order $10^2 - 10^4$ sample galaxies.
+This package was written to include a variety of computational tools for performing friends-of-friends group identification analyses, especially as related to the RESOLVE/ECO surveys (Kannappan et al. 2011, Moffett et al. 2015). Thus, the following tools are best suited in applications to volume-limited surveys with order 100 - 10,000 sample galaxies.
 
 ## Using foftools
 There are three key pieces of code in the package:

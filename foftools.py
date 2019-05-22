@@ -15,7 +15,7 @@ this process continues until there are no more friends in the chain.
 
 # Needed packages
 import numpy as np
-
+import pandas as pd 
 
 #####################################################################
 #####################################################################
@@ -104,6 +104,7 @@ class group:
         get_total_mag:  return group-integrated absolute magntiude.
         get_proj_radius: return projected radius of galaxy in Mpc/h.
         get_cz_disp:    return cz dispersion computed from all group members in km/s.
+        to_df:          obtain the members of the group as a pandas dataframe. Gives the option to save to csv by specifying a path to `savename`.
         
     WARNING: Always use the the group.add_member() method to add galaxies to the group.
     Doing, e.g., group.members.append(...) will not update the group.n property.
@@ -227,6 +228,26 @@ class group:
             return cz_disp
         else:
             return 0.
+        
+    def to_df(self, savename=None):        
+        table = []
+        for g in self.members:
+            table.append([g.name, g.ra, g.dec, g.cz, g.mag, g.groupID])
+            
+        df = pd.DataFrame(table)
+        
+        # Save if requested
+        try:
+            if (savename is not None):
+                df.to_csv(savename, index=False)
+            else:
+                pass
+        except:
+            raise IOError("File {} is invalid".format(savename))
+        
+        # return the dataframe
+        return df
+        
         
         
 #########################################################################
@@ -504,7 +525,7 @@ def print_count(grps):
     
 
 # IO functions
-import pandas as pd 
+
     
 def catalog_to_txt(grparr, savename):
     """Write the group catalog to text file. The function formats the text file by printing

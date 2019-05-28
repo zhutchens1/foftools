@@ -1,7 +1,7 @@
 # foftools - galaxy group identification using the friends-of-friends algorithm.
 
 
-This package was written to include a variety of computational tools for performing friends-of-friends group identification analyses, especially as related to the RESOLVE/ECO surveys (Kannappan et al. 2011, Moffett et al. 2015). Thus, the following tools are best suited in applications to volume-limited surveys with order 100 - 10,000 sample galaxies.
+This package was written to include a variety of computational tools for performing friends-of-friends group identification analyses, especially as related to the RESOLVE/ECO surveys (Kannappan et al. 2011, Moffett et al. 2015). Thus, the following tools are best suited in applications to volume-limited surveys with order 100 - 10,000 sample galaxies. For RESOLVE and ECO, analyses of the friends-of-friends group finding is reported in Eckert et al. 2016.
 
 ## Using foftools
 There are three key pieces of code in the package:
@@ -17,7 +17,8 @@ Suppose we have a galaxy `test01` with RA and declination (195, 28) degrees, and
 import foftools as fof
 x = fof.galaxy("test01", 195, 28, 5000, -18.0)
 ```
-We can also pass a boolean flag to each galaxy for various purposes under the property `fof.galaxy.fl`. The group ID number for a galaxy defaults to zero, as it assumes that galaxies have not yet been sorted into groups, but this can also be initialized through the `fof.galaxy.groupID` property. The defined attributes of the class are:
+
+The FOF algorithm is sensitive to RA and declination values, so we encourage users to implement higher-precision coordinate values for group-finding purposes. With the class instance, we can also pass a boolean flag to each galaxy for various purposes under the property `fof.galaxy.fl`. The group ID number for a galaxy defaults to zero, as it assumes that galaxies have not yet been sorted into groups, but this can also be initialized through the `fof.galaxy.groupID` property. The defined attributes of the class are:
 -  `fof.galaxy.phi`: the azimuthal coordinate of the galaxy (in radians) in a spherical-polar coordinate system.
 -  `fof.galaxy.theta`: the polar coordinate of the galaxy (in radians) in a spherical-polar coordinate system.
 - `fof.galaxy.x`: the angular x-component of the galaxy's sky location.
@@ -85,5 +86,6 @@ For more information on these, import the module and use the Python `?` tool.
 ## References
 - Kannappan, Sheila, et al. "The RESOLVE Survey: REsolved Spectroscopy Of a Local VolumE." Bulletin of the American Astronomical Society. Vol. 43. 2011.
 - Moffett, Amanda J., et al. "ECO and RESOLVE: Galaxy Disk Growth in Environmental Context." The Astrophysical Journal 812.2 (2015): 89.
+- Eckert, Kathleen D., et al. "RESOLVE and ECO: The Halo Mass-dependent Shape of Galaxy Stellar and Baryonic Mass Functions." The Astrophysical Journal 824.2 (2016): 124.
 - Berlind, Andreas A., et al. "Percolation galaxy groups and clusters in the SDSS redshift survey: identification, catalogs, and the multiplicity function." The Astrophysical Journal Supplement Series 167.1 (2006): 1.
 - Liu, Hauyu Baobab, et al. "A new galaxy group finding algorithm: Probability friends-of-friends." The Astrophysical Journal 681.2 (2008): 1046.

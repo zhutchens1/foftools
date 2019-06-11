@@ -70,9 +70,19 @@ class galaxy:
 
     
     def get_groupID(self):
+        """
+        Return the group ID of the galaxy.
+        Arguments: None
+        Returns: group ID (int)
+        """
         return self.groupID
     
     def set_groupID(self, groupID):
+        """
+        Set the group ID number to a specified value.
+        Arguments: groupID (int)
+        Return: None
+        """
         self.groupID = groupID
         
     
@@ -116,6 +126,11 @@ class group:
         self.n = len(self.members)
     
     def add_member(self, glxy):
+        """
+        Add a galaxy to the list of group members.
+        Arguments: glxy (type galaxy)
+        Returns: None. 
+        """
         if isinstance(glxy, galaxy):
             self.members.append(glxy)
             self.n = len(self.members)
@@ -138,6 +153,11 @@ class group:
         
     
     def get_skycoords(self):
+        """ 
+        Get the cental sky spherical-polar coordinates  of the group.
+        Arguments: None
+        Returns: tuple containing phi, theta values in degrees
+        """
         xcen = 0.
         ycen = 0.
         zcen = 0.
@@ -170,6 +190,11 @@ class group:
     
     
     def get_cen_cz(self):
+        """
+        Get the central redshift velocity of the group, c*z_central.
+        Arguments: None
+        Returns: czcen (type float)
+        """
         xcen = 0
         ycen = 0
         zcen = 0
@@ -185,6 +210,11 @@ class group:
         return czcen
         
     def get_total_mag(self):
+        """
+        Obtain the group-integrated total magnitude.
+        Arguments: None
+        Return: M (type float)
+        """
         M = 0
         for g in self.members:
             M += 10.0**(-0.4 * g.mag)
@@ -193,6 +223,11 @@ class group:
         return M
     
     def get_proj_radius(self):
+        """
+        Return the projected radius of the group. For single-galaxy groups, return 0.0.
+        Arguments: None
+        Return: projected radius (type float)
+        """
         Rproj = 0.
         for g in self.members:
             
@@ -217,6 +252,11 @@ class group:
 
     
     def get_cz_disp(self):
+        """
+        Obtain the velocity dispersion of the group of galaxies. For single-galaxy groups, return 0.0.
+        Arguments: None
+        Return: cz_disp (type float)
+        """
         # velocity dispersion
         c = 299800 # km/s
         Dz2 = 0
@@ -229,7 +269,12 @@ class group:
         else:
             return 0.
         
-    def to_df(self, savename=None):        
+    def to_df(self, savename=None):
+        """
+        Output the group's member to a pandas dataframe and save to a file (optional).
+        Arguments: savename (default None): name of file to save the dataframe. If None, no file will be saved.
+        Returns: df (type pandas.DataFrame): dataframe containing list of group members with name, coordinates, magnitude, cz, and groupID number.
+        """
         table = []
         for g in self.members:
             table.append([g.name, g.ra, g.dec, g.cz, g.mag, g.groupID])

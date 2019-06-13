@@ -23,7 +23,7 @@ import pandas as pd
 
 
 
-class galaxy:
+class galaxy(object):
     """ class `galaxy`
     A python class for a galaxy data type, which stores information such as the
     name, position, redshift, and magnitude.
@@ -112,7 +112,7 @@ class galaxy:
 
 
     
-class group:
+class group(object):
     """ class `group`
     A Python class for a galaxy group.
 

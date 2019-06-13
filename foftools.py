@@ -84,6 +84,22 @@ class galaxy:
         Return: None
         """
         self.groupID = groupID
+
+    def get_cz(self):
+        """
+        Return the cz velocity of the galaxy.
+        Arguments: None
+        Returns: cz value (float)
+        """
+        return self.cz
+
+    def set_cz(self, cz):
+        """
+        Set the cz of the galaxy to a specified value.
+        Arguments: cz (float)
+        Returns: None
+        """
+        self.cz = cz
         
     
     # Allow Python to print galaxy data.
@@ -162,7 +178,7 @@ class group:
         ycen = 0.
         zcen = 0.
         for g in self.members:
-            xcen += g.cz * g.x # ?
+            xcen += g.cz * g.x
             ycen += g.cz * g.y
             zcen += g.cz * g.z
         xcen /= len(self.members)

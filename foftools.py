@@ -48,7 +48,7 @@ class galaxy(object):
     
     
     """
-    def __init__(self, name, ra, dec, cz, mag, fl=None, groupID=0):
+    def __init__(self, name, ra, dec, cz, mag, fl=None, groupID=0, **kwargs):
         # Basic properties
         self.name = name
         self.ra = np.float128(ra) # degrees
@@ -57,7 +57,8 @@ class galaxy(object):
         self.mag = mag
         self.fl = fl
         self.groupID = groupID
-        
+        self.__dict__.update(kwargs)
+
         # Spherical coordinates
         self.phi = np.float128(self.ra*(np.pi/180.0)) # rad
         self.theta = np.float128(np.pi/2.0 - self.dec*(np.pi/180)) # rad
@@ -68,7 +69,6 @@ class galaxy(object):
         self.y = np.sin(self.theta)*np.sin(self.phi)
         self.z = np.cos(self.theta)
 
-    
     def get_groupID(self):
         """
         Return the group ID of the galaxy.
@@ -133,12 +133,14 @@ class group(object):
     WARNING: Always use the the group.add_member() method to add galaxies to the group.
     Doing, e.g., group.members.append(...) will not update the group.n property.
     """
-    def __init__(self, groupID):
+    def __init__(self, groupID, **kwargs):
         self.groupID = groupID
         
         self.members = []
         self.n = len(self.members)
-    
+        
+        self.__dict__.update(kwargs)
+
     def add_member(self, glxy):
         """
         Add a galaxy to the list of group members.
@@ -154,7 +156,7 @@ class group(object):
     
     def __repr__(self):
         if self.n == 1:
-                return "ID {}: N={}\t RA={:0.4}\t Dec={:0.4}\t cz={:0.4E} km/s\t M={:0.3}\t R_proj={:0.4}".format(int(self.groupID),
+            return "ID {}: N={}\t RA={:0.4}\t Dec={:0.4}\t cz={:0.4E} km/s\t M={:0.3}\t R_proj={:0.4}".format(int(self.groupID),
                             self.n, self.get_skycoords()[0],self.get_skycoords()[1], self.get_cen_cz(),
                             self.get_total_mag(), 0.0)         
         else:
@@ -259,7 +261,7 @@ class group(object):
             rp = sinDpsi * g.cz/(100.)
             Rproj += rp**2
             
-        if self.groupID != 0:
+        if self.n > 1:
             return np.sqrt(Rproj/float(self.n))
         else:
             return 0.
@@ -282,7 +284,21 @@ class group(object):
             return cz_disp
         else:
             return 0.
-        
+    
+    def get_int_logMstar(self):
+        """
+        Return the group-integrated stellar mass.
+        Arguments: None
+        Output: group-integrated log stellar mass, logM_total (float).
+        """
+        sumv = 0.
+        try:
+            for g in self.members:
+                sumv += 10.0**(g.logMstar)
+            return np.log10(sumv)
+        except:
+            raise AttributeError("galaxy {} has no attribute `logMstar`".format(g.name))
+
     def to_df(self, savename=None):
         """
         Output the group's member to a pandas dataframe and save to a file (optional).

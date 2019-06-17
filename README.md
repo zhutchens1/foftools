@@ -64,8 +64,8 @@ Other methods of the group class include:
 - `fof.group.get_total_mag()`: return the group total absolute magnitude.
 - `fof.group.get_proj_radius()`: return the projected radius of the group.
 - `fof.group.get_cz_disp()`: return the velocity dispersion of the group's members.
+- `fof.group.get_int_logMstar()`: return the group-integrated logarithmic stellar mass (logM_total).
 - `fof.to_df()`: return the group's members as a pandas dataframe. Additonally, save the group's members to CSV by specifying a path to `savename` (default `None`).
-
 
 
 ### Other functions

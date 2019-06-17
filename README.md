@@ -76,9 +76,9 @@ For more information on these, import the module and use the Python `?` tool.
 - `fof.within_velocity_range(czmin, czmax, *gxs)`: check whether any element in a list of galaxies is outside a bounding redshift range. 
 - `fof.find_group(gxs, grpID)`: return a group of specified ID number from a list of galaxies.
 - `fof.galaxy_to_group_arr(gxs)`: convert a list of galaxies, `gxs`, into a list of groups.
-- `fof.count_singular(gxs)`: count the number of single-galaxy groups in an array `gxs`.
-- `fof.count_nonsingular(gxs)`: count the number of nonsingular groups in an array `gxs`.
-- `fof.print_count(gxs)`: print out basic counting numbers for a list of galaxies.
+- `fof.count_singular(grps)`: count the number of single-galaxy groups in an array `grps`.
+- `fof.count_nonsingular(grps)`: count the number of nonsingular groups in an array `grps`.
+- `fof.print_count(grps)`: print out basic counting numbers for a list of groups.
 - `fof.catalog_to_txt(grparr, savename)`: write an array of groups into a catalog text file. 
 - `fof.array_to_pandas(grparr, savename=None)`: Return (and/or save) a pandas dataframe constructed from a list of groups.
 

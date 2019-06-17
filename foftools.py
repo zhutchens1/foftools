@@ -109,8 +109,6 @@ class galaxy(object):
     def __str__(self):
         return self.__repr__()
 
-
-
     
 class group(object):
     """ class `group`
@@ -404,7 +402,7 @@ def within_velocity_range(czmin, czmax, *gxs):
 
 
 
-def galaxy_fof(gxs, bperp, blos, s):
+def galaxy_fof(gxs, bperp, blos, s, printConf=True):
     """Perform a friends-of-friends group finding on an array of galaxies, as
     based on the method of Berlind et al. 2006. The luminosity floor needs to be
     implemented prior to using this function, so that gxs contains only galaxies 
@@ -414,7 +412,8 @@ def galaxy_fof(gxs, bperp, blos, s):
         bperp (float): perpendicular linking constant; for ECO, use 0.07.
         blos (float): line-of-sight linking constant; for ECO, use 1.1.
         s (float): mean separation between galaxies. Calculated as n**(-1/3),
-            where n = N/V. 
+            where n = N/V.
+        printConf (bool, default True): if True, print a confirmation that FOF is complete.
     
     Returns:
         None. The algorithm creates unique group ID numbers for every identified
@@ -474,8 +473,8 @@ def galaxy_fof(gxs, bperp, blos, s):
     for i,g in enumerate(gxs):
         if g.groupID == 0:
             g.set_groupID(grpindex + i)
-            
-    print("FOF Group finding complete.")
+    if printConf:        
+        print("FOF Group finding complete.")
     
 
 

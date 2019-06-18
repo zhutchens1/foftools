@@ -48,7 +48,7 @@ class galaxy(object):
     
     
     """
-    def __init__(self, name, ra, dec, cz, mag, fl=None, groupID=0, **kwargs):
+    def __init__(self, name, ra, dec, cz, mag, fl=None, groupID=0, logMstar=None, logMgas=None, **kwargs):
         # Basic properties
         self.name = name
         self.ra = np.float128(ra) # degrees
@@ -101,7 +101,12 @@ class galaxy(object):
         """
         self.cz = cz
         
-    
+    def get_logMbary(self):
+        try:
+            return np.log10(10**self.logMstar + 10**self.logMgas)
+        except ValueError:
+            print("Check that logMstar and logMgas attributes are provided to class instance")
+
     # Allow Python to print galaxy data.
     def __repr__(self):
         return "Name: {}\t RA:{}\t Dec:{}\t cz={} km/s \t Mag:{}\t grpID={}".format(*[self.name, self.ra, self.dec, self.cz, self.mag, self.groupID])
@@ -245,6 +250,10 @@ class group(object):
         Return: projected radius (type float)
         """
         Rproj = 0.
+        
+        if self.n <= 1:
+            return 0.0
+
         for g in self.members:
             
             # Get RA/Dec in degrees
@@ -257,7 +266,10 @@ class group(object):
             # Get Rproj
             cosDpsi = np.cos(thetacen)*np.cos(np.pi/2 - g.theta)+np.sin(thetacen)*np.sin(np.pi/2 - g.theta)*np.cos((phicen - g.phi))
             sinDpsi = np.sqrt(1-cosDpsi**2)
-            
+           
+            if cosDpsi > 1:
+                print(self)
+
             rp = sinDpsi * g.cz/(100.)
             Rproj += rp**2
             
@@ -279,7 +291,7 @@ class group(object):
         for g in self.members:
             Dz2 += (g.cz - self.get_cen_cz())**2
         
-        if self.groupID != 0:
+        if self.n > 1:
             cz_disp = np.sqrt(Dz2/(self.n-1))/(1.+self.get_cen_cz()/c)
             return cz_disp
         else:
@@ -297,7 +309,22 @@ class group(object):
                 sumv += 10.0**(g.logMstar)
             return np.log10(sumv)
         except:
-            raise AttributeError("galaxy {} has no attribute `logMstar`".format(g.name))
+            raise AttributeError("galaxies need logMstar attributes")
+
+    def get_int_logMbary(self):
+        """
+        Return the group-integrated baryonic (gas+stellar) mass.
+        Arguments: None
+        Output: group-integrated log baryonic mass, logM_bary_total (float).
+        """
+        sumv = 0.
+        try:
+            for g in self.members:
+                sumv += 10.0**(g.get_logMbary())
+            return np.log10(sumv)
+        except:
+            raise AttributeError("galaxies need both logMstar and logMgas attributes")
+
 
     def to_df(self, savename=None):
         """

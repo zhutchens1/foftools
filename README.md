@@ -28,6 +28,7 @@ The FOF algorithm is sensitive to RA and declination values, so we encourage use
 The galaxy class also includes the following methods:
 - `fof.galaxy.get_groupID()`: return the groupID of the galaxy. The convention of the code is that a group ID of zero indicates the galaxy is not yet associated to any group whatsoever.
 - `fof.galaxy.set_groupID(groupID)`: redefine the group ID of the galaxy to the value of `groupID`.
+- `fof.galaxy.get_logMbary()`: return the galaxy's logarithmic baryonic mass (gas + stellar mass). To use this, you will need to have provided values to the `galaxy.logMstar` and `galaxy.logMgas` attributes.
 
 ### The Friends-of-Friends Algorithm
 We sort groups of galaxies following the process described in Berlind et al. (2006). In this approach, two galaxies are considered friends if the perpendicular and line-of-sight distances between them are each less than a characteristic linking length. The perpendicular and line-of-sight linking lengths are products of the mean separation between galaxies with the perpendicular and line-of-sight linking factors.
@@ -65,6 +66,7 @@ Other methods of the group class include:
 - `fof.group.get_proj_radius()`: return the projected radius of the group.
 - `fof.group.get_cz_disp()`: return the velocity dispersion of the group's members.
 - `fof.group.get_int_logMstar()`: return the group-integrated logarithmic stellar mass (logM_total).
+- `fof.group.get_int_logMbary()`: return the group-integrated logarithmic baryonic mass (gas + stellar mass).
 - `fof.to_df()`: return the group's members as a pandas dataframe. Additonally, save the group's members to CSV by specifying a path to `savename` (default `None`).
 
 

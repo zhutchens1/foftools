@@ -57,6 +57,8 @@ class galaxy(object):
         self.mag = mag
         self.fl = fl
         self.groupID = groupID
+        self.logMstar = logMstar
+        self.logMgas = logMgas
         self.__dict__.update(kwargs)
 
         # Spherical coordinates

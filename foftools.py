@@ -2,7 +2,7 @@
 """
 package 'foftools'
 @author: Zackary L. Hutchens - UNC-CH
-v1. March 29, 2019.
+v1.1 June 23, 2019.
 
 This package contains classes and functions for performing galaxy group
 identification using the friends-of-friends algorithm. The friends-of-friends
@@ -15,7 +15,10 @@ this process continues until there are no more friends in the chain.
 
 # Needed packages
 import numpy as np
-import pandas as pd 
+import pandas as pd
+
+from astropy.cosmology import LambdaCDM
+cosmo = LambdaCDM(H0=100.0, Om0=0.3, Ode0=0.7)
 
 #####################################################################
 #####################################################################
@@ -36,16 +39,21 @@ class galaxy(object):
         mag (float):    SDSS r-band absolute magnitude of the galaxy.
         fl (bool):      Boolean flag for galaxy (default None). Can be used to note whether or a RESOLVE A/B galaxy is above the luminosity floor.
         groupID (int):  groupID number of the galaxy (default 0).
-    
+        logMgas:        logarithmic gas mass of the galaxy (default None.)
+        logMstar:       logarithmic stellar mass of the galaxy (default None.)
+
     Properties:
         phi (float):    azimuthal angle (ra) in radians
         theta (float):  polar angle (90 deg - dec) in radians
         x,y,z (float):  Cartesian-like angular coordinates in the sky.
-    
+
     Methods:
         get_groupID:    returns group ID number
         set_groupID:    sets group ID number
-    
+        get_cz:         returns group-corrected velocity [km/s]
+        set_cz:         sets group-corrected velocity [km/s]
+        get_logMbary:   return the logarithmic baryonic mass of the galaxy (stellar + gas).
+        comovingdist:   return the line-of-sight comoving distance to the galaxy in Mpc/h.
     
     """
     def __init__(self, name, ra, dec, cz, mag, fl=None, groupID=0, logMstar=None, logMgas=None, **kwargs):
@@ -109,6 +117,18 @@ class galaxy(object):
         except ValueError:
             print("Check that logMstar and logMgas attributes are provided to class instance")
 
+    def comovingdist(self):
+        """
+        Compute the line-of-sight comoving distance to the galaxy, using `astropy.cosmology.LambdaCDM(...).comoving_distance(z).
+        The FOF package assumes H0 = 100, OmegaM = 0.3, and Lambda = 0.7 but this can be modified in the `foftools` source. 
+        """
+        try:
+            c = 3.00e5
+            return cosmo.comoving_distance(self.cz / c).value
+        except:
+            raise ValueError("Check that `astropy.cosmology.FLRW` is implemented correctly and that z is scalar.")
+
+
     # Allow Python to print galaxy data.
     def __repr__(self):
         return "Name: {}\t RA:{}\t Dec:{}\t cz={} km/s \t Mag:{}\t grpID={}".format(*[self.name, self.ra, self.dec, self.cz, self.mag, self.groupID])
@@ -122,19 +142,21 @@ class group(object):
     A Python class for a galaxy group.
 
     Initialaization parameters:
-        groupID (int):  unique group ID number
+        groupID (int):      unique group ID number
     
     Properties:
-        members (arr):  array of all group members. Each group member needs to be expressed as an instance of the galaxy class (see above for `foftools.galaxy` class.)
-        n (int):        number of members, defined as len(self.members).
+        members (arr):      array of all group members. Each group member needs to be expressed as an instance of the galaxy class (see above for `foftools.galaxy` class.)
+        n (int):            number of members, defined as len(self.members).
     
     Methods:
-        add_member:     appends a galaxy to self.members.
-        get_skycoords:  return (phi, theta) values (in rad) the group center.
-        get_cen_cz:     return central velocity of group (km/s).
-        get_total_mag:  return group-integrated absolute magntiude.
-        get_proj_radius: return projected radius of galaxy in Mpc/h.
-        get_cz_disp:    return cz dispersion computed from all group members in km/s.
+        add_member:         appends a galaxy to self.members.
+        get_skycoords:      return (phi, theta) values (in rad) the group center.
+        get_cen_cz:         return central velocity of group (km/s).
+        get_total_mag:      return group-integrated absolute magntiude.
+        get_proj_radius:    return projected radius of galaxy in Mpc/h.
+        get_cz_disp:        return cz dispersion computed from all group members in km/s.
+        get_int_logMstar:   return group-integrated logarithmic stellar mass.
+        get_int_logMbary:   return group-integrated logarithmic baryonic mass.
         to_df:          obtain the members of the group as a pandas dataframe. Gives the option to save to csv by specifying a path to `savename`.
         
     WARNING: Always use the the group.add_member() method to add galaxies to the group.
@@ -379,18 +401,15 @@ def d_perp(x, glxy):
     Arguments: x (type galaxy), glxy (type galaxy).
     Returns: Dperp in Mpc/h (type float)
     """
-    H_0 = 100.0 # km/s/Mpc
     theta_ij = ang_sep(x, glxy)
-    return 1/(H_0) * (x.cz + glxy.cz) * np.sin(theta_ij / 2.0)
-    
+    return (x.comovingdist() + glxy.comovingdist())*np.sin(theta_ij / 2.0)
+
 def d_los(x, glxy):
     """Compute the line-of-sight separation between galaxies (Berlind et al. 2006).
     Arguments: x (type galaxy), glxy (type galaxy).
     Returns: Dlos in Mpc/h (type float)
     """
-    H_0 = 100.0 # km/s/Mpc
-    return 1/(H_0) * np.abs(x.cz - glxy.cz)
-
+    return np.abs(x.comovingdist() - glxy.comovingdist())
 
 def linking_length(g1, g2, b_perp, b_para, s):
     """Determine whether two galaxies are within the linking length.

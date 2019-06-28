@@ -32,20 +32,21 @@ class galaxy(object):
     name, position, redshift, and magnitude.
 
     Initialization parameters:
-        name (str):     name of the galaxy
-        ra (float):     right-acension of galaxy in degrees
-        dec (float):    declination of galaxy in degrees
-        cz (float):     local group-corrected velocity in km/s
-        mag (float):    SDSS r-band absolute magnitude of the galaxy.
-        fl (bool):      Boolean flag for galaxy (default None). Can be used to note whether or a RESOLVE A/B galaxy is above the luminosity floor.
-        groupID (int):  groupID number of the galaxy (default 0).
-        logMgas:        logarithmic gas mass of the galaxy (default None.)
-        logMstar:       logarithmic stellar mass of the galaxy (default None.)
+        name (str):             name of the galaxy
+        ra (float):             right-acension of galaxy in degrees
+        dec (float):            declination of galaxy in degrees
+        cz (float):             local group-corrected velocity in km/s
+        mag (float):            SDSS r-band absolute magnitude of the galaxy.
+        fl (bool):              Boolean flag for galaxy (default None). Can be used to note whether or a RESOLVE A/B galaxy is above the luminosity floor.
+        groupID (int):          groupID number of the galaxy (default 0).
+        logMgas:                logarithmic gas mass of the galaxy (default None.)
+        logMstar:               logarithmic stellar mass of the galaxy (default None.)
 
     Properties:
-        phi (float):    azimuthal angle (ra) in radians
-        theta (float):  polar angle (90 deg - dec) in radians
-        x,y,z (float):  Cartesian-like angular coordinates in the sky.
+        phi (float):            azimuthal angle (ra) in radians
+        theta (float):          polar angle (90 deg - dec) in radians
+        x,y,z (float):          Cartesian-like angular coordinates in the sky.
+        comovingdist (float):   line-of-sight comoving distance to the galaxy in Mpc/h. Assumes H0 = 100, OmegaM = 0.3, OmegaDE = 0.7.
 
     Methods:
         get_groupID:    returns group ID number
@@ -79,6 +80,9 @@ class galaxy(object):
         self.y = np.sin(self.theta)*np.sin(self.phi)
         self.z = np.cos(self.theta)
 
+        c = 3.00e5
+        self.comovingdist = cosmo.comoving_distance(self.cz / c).value
+
     def get_groupID(self):
         """
         Return the group ID of the galaxy.
@@ -110,24 +114,13 @@ class galaxy(object):
         Returns: None
         """
         self.cz = cz
-        
+        self.comovingdist = cosmo.comoving_distance(self.cz / c)
+
     def get_logMbary(self):
         try:
             return np.log10(10**self.logMstar + 10**self.logMgas)
         except ValueError:
             print("Check that logMstar and logMgas attributes are provided to class instance")
-
-    def comovingdist(self):
-        """
-        Compute the line-of-sight comoving distance to the galaxy, using `astropy.cosmology.LambdaCDM(...).comoving_distance(z).
-        The FOF package assumes H0 = 100, OmegaM = 0.3, and Lambda = 0.7 but this can be modified in the `foftools` source. 
-        """
-        try:
-            c = 3.00e5
-            return cosmo.comoving_distance(self.cz / c).value
-        except:
-            raise ValueError("Check that `astropy.cosmology.FLRW` is implemented correctly and that z is scalar.")
-
 
     # Allow Python to print galaxy data.
     def __repr__(self):
@@ -402,14 +395,14 @@ def d_perp(x, glxy):
     Returns: Dperp in Mpc/h (type float)
     """
     theta_ij = ang_sep(x, glxy)
-    return (x.comovingdist() + glxy.comovingdist())*np.sin(theta_ij / 2.0)
+    return (x.comovingdist + glxy.comovingdist)*np.sin(theta_ij / 2.0)
 
 def d_los(x, glxy):
     """Compute the line-of-sight separation between galaxies (Berlind et al. 2006).
     Arguments: x (type galaxy), glxy (type galaxy).
     Returns: Dlos in Mpc/h (type float)
     """
-    return np.abs(x.comovingdist() - glxy.comovingdist())
+    return np.abs(x.comovingdist - glxy.comovingdist)
 
 def linking_length(g1, g2, b_perp, b_para, s):
     """Determine whether two galaxies are within the linking length.

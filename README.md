@@ -31,7 +31,7 @@ The galaxy class also includes the following methods:
 - `fof.galaxy.get_logMbary()`: return the galaxy's logarithmic baryonic mass (gas + stellar mass). To use this, you will need to have provided values to the `galaxy.logMstar` and `galaxy.logMgas` attributes.
 
 ### The Friends-of-Friends Algorithm
-We sort groups of galaxies following the process described in Berlind et al. (2006). In this approach, two galaxies are considered friends if the perpendicular and line-of-sight distances between them are each less than a characteristic linking length. The perpendicular and line-of-sight linking lengths are products of the mean separation between galaxies with the perpendicular and line-of-sight linking factors.
+We sort groups of galaxies following the process described in Berlind et al. (2006). In this approach, two galaxies are considered friends if the perpendicular and line-of-sight comoving distances between them are each less than a characteristic linking length. The perpendicular and line-of-sight linking lengths are products of the mean separation between galaxies with the perpendicular and line-of-sight linking faictors.
 
 The choice of linking factor is dependent on survey and can be optimized for different statistical purposes. For example, a flux-limited galaxy survey may require linking factors that are redshift-dependent (cf. Liu et al. 2008). However, since RESOLVE and ECO are volume-limited, our code is written to assume the linking factors to be completely constant. However, the `foftools` module can be easily modified to meet other purposes.
 
@@ -41,7 +41,7 @@ fof.galaxy_fof(gxs, bperp, blos, s)
 ```
 where `bperp` is the perpendicular linking factor, `blos` is the line-of-sight linking factor, and `s` is the mean separation, each as described above. The argument `gxs` is a list of galaxies (instances of the `fof.galaxy` class) on which to perform the group-finding. **Therefore, the `gxs` array must be prepared in advance of using the FoF algorithm to meet the luminosity-floor and bounding redshift values required by the sample.** The function returns nothing; instead, it identifies unique groups of galaxies and assigns each galaxy the appropriate group ID number. Afterwards, it distinguishes those galaxies that were not found to be in nonsingular groups and gives them a unique ID number. These are called "single-galaxy groups." After the code is finished, it will print a confirmation, and each galaxy in `gxs` will have a non-zero group ID number.
 
-**Note: The FoF algorithm will run helper functions for calculating the perpendicular and line-of-sight distances betweeng galaxies. These functions assume a simple Hubble's law cosmology with H_0 = 100 km/s.**
+**Note: The FoF algorithm will run helper functions for calculating the perpendicular and line-of-sight comoving distances between galaxies. The `foftools` package defaults to a LambdaCDM cosmology with H0 = 100.0, OmegaM = 0.3, and OmegaDE = 0.7. These can be modified in the source.**
 
 
 ### Groups

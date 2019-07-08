@@ -18,15 +18,29 @@ import foftools as fof
 x = fof.galaxy("test01", 195, 28, 5000, -18.0)
 ```
 
-The FOF algorithm is sensitive to RA and declination values, so we encourage users to implement higher-precision coordinate values for group-finding purposes. With the class instance, we can also pass a boolean flag to each galaxy for various purposes under the property `fof.galaxy.fl`. The group ID number for a galaxy defaults to zero, as it assumes that galaxies have not yet been sorted into groups, but this can also be initialized through the `fof.galaxy.groupID` property. The defined attributes of the class are:
--  `fof.galaxy.phi`: the azimuthal coordinate of the galaxy (in radians) in a spherical-polar coordinate system.
+The FOF algorithm is sensitive to RA and declination values, so we encourage users to implement higher-precision coordinate values for group-finding purposes. With the class instance, we can also pass a boolean flag to each galaxy for various purposes under the property `fof.galaxy.fl`. The group ID number for a galaxy defaults to zero, as it assumes that galaxies have not yet been sorted into groups, but this can also be initialized through the `fof.galaxy.groupID` property. The initialization attributes are:
+- `fof.galaxy.ra`: right-ascension in degrees
+- `fof.galaxy.dec`: declination in degrees
+- `fof.galaxy.cz`: redshift velocity of target in km/s
+- `fof.galaxy.mag`: absolute magnitude of galaxy
+- `fof.galaxy.fl`: general purpose 1/0 flag, default None.
+- `fof.galaxy.groupID`: galaxy group ID number, defaults to zero.
+- `fof.galaxy.logMgas`: logarithmic gas mass of galaxy, default None.
+- `fof.galaxy.logMstar`: logarithmic stellar mass of galaxy, default None.
+- `fof.galaxy.czerr`: 1-sigma errorbar on `cz` value. Needed for probability FoF group finding. 
+
+The defined class attributes are:
+-  `fof.galaxy.phi`: the azimuthal coordinate of the galaxy (in radians) iin a spherical-polar coordinate system.
 -  `fof.galaxy.theta`: the polar coordinate of the galaxy (in radians) in a spherical-polar coordinate system.
 - `fof.galaxy.x`: the angular x-component of the galaxy's sky location.
 - `fof.galaxy.y`: the angular y-component of the galaxy's sky location.
 - `fof.galaxy.z`: the angular z-component of the galaxy's sky location.
+- `fof.galaxy.comovingdist`: line-of-sight comoving distance to the galaxy in Mpc/h. Assumes H0=100, OmegaM=0.3, OmegaDE=0.7.
 
 The galaxy class also includes the following methods:
-- `fof.galaxy.get_groupID()`: return the groupID of the galaxy. The convention of the code is that a group ID of zero indicates the galaxy is not yet associated to any group whatsoever.
+- `fof.galaxy.get_cz()`: return the cz value of the galaxy.
+- `fof.galaxy.set_cz(cz)`: redefine the velocity of the galaxy to value `cz`. 
+- `fof.galaxy.get_groupID()`: return the groupID of the galaxy. The convention of the code is that a group ID of zero indicates the galaxy is not yet associated to any group whatsoever (i.e., meaning it has also not been explicitly identified as a single-galaxy group).
 - `fof.galaxy.set_groupID(groupID)`: redefine the group ID of the galaxy to the value of `groupID`.
 - `fof.galaxy.get_logMbary()`: return the galaxy's logarithmic baryonic mass (gas + stellar mass). To use this, you will need to have provided values to the `galaxy.logMstar` and `galaxy.logMgas` attributes.
 
@@ -43,6 +57,15 @@ where `bperp` is the perpendicular linking factor, `blos` is the line-of-sight l
 
 **Note: The FoF algorithm will run helper functions for calculating the perpendicular and line-of-sight comoving distances between galaxies. The `foftools` package defaults to a LambdaCDM cosmology with H0 = 100.0, OmegaM = 0.3, and OmegaDE = 0.7. These can be modified in the source.**
 
+### The Probability Friends-of-Friends Algorithm
+
+The package includes an implementation of the probability friends-of-friends algorithm (Liu et al. 2008) for volume-limited data sets. This algorithm presents a modification to the traditional friends-of-friends linking criteria. In PFoF, galaxies are modeled with probability distribution functions, and satisfaction of the line-of-sight linking criterion is given probabilistically. Our implementation models the galaxy PDFs with Gaussian distributions whose centroids are the galaxies' measured redshifts and whose standard deviations are the errorbars on the galaxies' redshifts. Thus, each galaxy to be grouped needs to have its `galaxy.czerr` attribute defined. The routine can be called from
+```
+fof.prob_fof(gxs, bperp, blos, s, pth)
+``` 
+where `gxs` is a list of galaxy instances with redshift errorbars, `bperp` is the perpendicular linking constant, `blos` is the line-of-sight linking constant, and `s` is the mean separation between targets in the volume-limited data set. The additional argument `pth` is a threshold or "cutoff" probability that is used to determine whether the friendship probability between a pair of galaxies is sufficient for group membership. 
+
+This function is written in the same conventions as `fof.galaxy_fof(...)`. That is, it resets all galaxies to have group ID, and, in determining the groups, will set each galaxy's group ID (`fof.galaxy.groupID`) to the appropriate value. Single galaxy-groups are given their own unique, nonzero group ID number.
 
 ### Groups
 

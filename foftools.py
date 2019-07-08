@@ -2,20 +2,20 @@
 """
 package 'foftools'
 @author: Zackary L. Hutchens - UNC-CH
-v1.1 June 23, 2019.
+v2.0 July 8, 2019.
 
 This package contains classes and functions for performing galaxy group
-identification using the friends-of-friends algorithm. The friends-of-friends
-algorithm begins with a central galaxy, and iterates through the rest of the 
-sample, finding its "friends" -- other galaxies within a parallel and line-
-of-sight linking length (related to the survey volume) from the initial galaxy.
-In further iterations, friends of these friends are to added to the group, and
-this process continues until there are no more friends in the chain.
+identification using the friends-of-friends (FoF) and probability friends-of-friends
+(PFoF) algorithms, as well class structures for working with galaxies and groups as
+their own data types.:wq
 """
 
 # Needed packages
 import numpy as np
 import pandas as pd
+import itertools
+from scipy.integrate import quad
+from math import erf
 
 from astropy.cosmology import LambdaCDM
 cosmo = LambdaCDM(H0=100.0, Om0=0.3, Ode0=0.7)
@@ -39,8 +39,9 @@ class galaxy(object):
         mag (float):            SDSS r-band absolute magnitude of the galaxy.
         fl (bool):              Boolean flag for galaxy (default None). Can be used to note whether or a RESOLVE A/B galaxy is above the luminosity floor.
         groupID (int):          groupID number of the galaxy (default 0).
-        logMgas:                logarithmic gas mass of the galaxy (default None.)
-        logMstar:               logarithmic stellar mass of the galaxy (default None.)
+        logMgas (float):        logarithmic gas mass of the galaxy (default None.)
+        logMstar (float):       logarithmic stellar mass of the galaxy (default None.)
+        czerr (float):          1-sigma uncertainty in cz measurement `cz.` Needed for probability FoF (default None).
 
     Properties:
         phi (float):            azimuthal angle (ra) in radians
@@ -52,12 +53,11 @@ class galaxy(object):
         get_groupID:    returns group ID number
         set_groupID:    sets group ID number
         get_cz:         returns group-corrected velocity [km/s]
-        set_cz:         sets group-corrected velocity [km/s]
+        set_cz:         sets group-corrected velocity [km/s] and associated comoving distance [Mpc/h]
         get_logMbary:   return the logarithmic baryonic mass of the galaxy (stellar + gas).
-        comovingdist:   return the line-of-sight comoving distance to the galaxy in Mpc/h.
     
     """
-    def __init__(self, name, ra, dec, cz, mag, fl=None, groupID=0, logMstar=None, logMgas=None, **kwargs):
+    def __init__(self, name, ra, dec, cz, mag, fl=None, groupID=0, logMstar=None, logMgas=None, czerr=None, **kwargs):
         # Basic properties
         self.name = name
         self.ra = np.float128(ra) # degrees
@@ -68,6 +68,7 @@ class galaxy(object):
         self.groupID = groupID
         self.logMstar = logMstar
         self.logMgas = logMgas
+        self.czerr = czerr
         self.__dict__.update(kwargs)
 
         # Spherical coordinates
@@ -80,8 +81,8 @@ class galaxy(object):
         self.y = np.sin(self.theta)*np.sin(self.phi)
         self.z = np.cos(self.theta)
 
-        c = 3.00e5
-        self.comovingdist = cosmo.comoving_distance(self.cz / c).value
+        z = self.cz / 3.00e+05
+        self.comovingdist = cosmo.comoving_distance(np.float64(z)).value
 
     def get_groupID(self):
         """
@@ -124,7 +125,7 @@ class galaxy(object):
 
     # Allow Python to print galaxy data.
     def __repr__(self):
-        return "Name: {}\t RA:{}\t Dec:{}\t cz={} km/s \t Mag:{}\t grpID={}".format(*[self.name, self.ra, self.dec, self.cz, self.mag, self.groupID])
+        return "Name: {}\t RA:{:0.2}\t Dec:{:0.2}\t cz={:0.4} km/s \t Mag:{:0.3}\t grpID={}".format(*[self.name, self.ra, self.dec, self.cz, self.mag, self.groupID])
     
     def __str__(self):
         return self.__repr__()
@@ -484,46 +485,45 @@ def galaxy_fof(gxs, bperp, blos, s, printConf=True):
     reset_groups(gxs)
     
     # Identify the groups
-    for g1 in gxs:
-        for g2 in gxs:
-            if (g1.name != g2.name):
-                if linking_length(g1, g2, bperp, blos, s):
+    for g1, g2 in itertools.product(gxs, gxs):
+        if (g1.name != g2.name):
+            if linking_length(g1, g2, bperp, blos, s):
                     
-                    # Case 1: Galaxies already in the same group
-                    if ((g1.groupID == g2.groupID) and (g1.groupID != 0) and (g2.groupID != 0)):
-                        pass
-
-                    # Case 2: g1 is already in a group, but g2 is not. Put g2 in the group of g1.
-                    elif ((g1.groupID != g2.groupID) and (g1.groupID != 0) and (g2.groupID == 0)):
-                        g2.set_groupID(g1.groupID)
-                    
-                    # Case 3: g2 is already in a group, but g1 is not. Put g1 in the group of g2.
-                    elif ((g1.groupID != g2.groupID) and (g1.groupID == 0) and (g2.groupID != 0)):
-                            g1.set_groupID(g2.groupID)
-                    
-                    # Case 4: Neither of them are in a group. Make a new group.
-                    elif ((g1.groupID == 0) and (g2.groupID == 0)):
-                        g2.set_groupID(grpindex)
-                        g1.set_groupID(grpindex)
-                        grpindex += 1
-                    # Case 5: g2 and g1 are already identified into groups, but they are still
-                    # within a linking length of one another. In that case, we need to link their
-                    # groups together.
-                    elif ((g1.groupID != g2.groupID) and (g1.groupID !=0) and (g2.groupID != 0)):
-                        keeping_id = g1.groupID
-                        equiv_id = g2.groupID
-                        for g in gxs:
-                            if g.groupID == equiv_id:
-                                g.set_groupID(keeping_id)   
-                    else:
-                        # Should be nothing here!
-                        print('WARNING: These galaxies failed the group-finding algorithm.')
-                        print(g1)
-                        print(g2)
-                else:
+                # Case 1: Galaxies already in the same group
+                if ((g1.groupID == g2.groupID) and (g1.groupID != 0) and (g2.groupID != 0)):
                     pass
+
+                # Case 2: g1 is already in a group, but g2 is not. Put g2 in the group of g1.
+                elif ((g1.groupID != g2.groupID) and (g1.groupID != 0) and (g2.groupID == 0)):
+                    g2.set_groupID(g1.groupID)
+                    
+                # Case 3: g2 is already in a group, but g1 is not. Put g1 in the group of g2.
+                elif ((g1.groupID != g2.groupID) and (g1.groupID == 0) and (g2.groupID != 0)):
+                    g1.set_groupID(g2.groupID)
+                    
+                # Case 4: Neither of them are in a group. Make a new group.
+                elif ((g1.groupID == 0) and (g2.groupID == 0)):
+                    g2.set_groupID(grpindex)
+                    g1.set_groupID(grpindex)
+                    grpindex += 1
+                # Case 5: g2 and g1 are already identified into groups, but they are still
+                # within a linking length of one another. In that case, we need to link their
+                # groups together.
+                elif ((g1.groupID != g2.groupID) and (g1.groupID !=0) and (g2.groupID != 0)):
+                    keeping_id = g1.groupID
+                    equiv_id = g2.groupID
+                    for g in gxs:
+                        if g.groupID == equiv_id:
+                            g.set_groupID(keeping_id)   
+                else:
+                    # Should be nothing here!
+                    print('WARNING: These galaxies failed the group-finding algorithm.')
+                    print(g1)
+                    print(g2)
             else:
                 pass
+        else:
+            pass
     
     # The group finding for nonsingular groups is done. Now, just need to make all
     # which were not idenfied into single galaxy groups.
@@ -532,7 +532,157 @@ def galaxy_fof(gxs, bperp, blos, s, printConf=True):
             g.set_groupID(grpindex + i)
     if printConf:        
         print("FOF Group finding complete.")
+        
+        
+###################################################################
+####################################################################
+####################################################################
+# Probability Friends-of-friends
+
+def gauss(x, mu, sigma):
+    """
+    Gaussian function.
+    Arguments:
+        x - dynamic variable
+        mu - centroid of distribution
+        sigma - standard error of distribution
+    Returns:
+        PDF value evaluated at `x`
+    """
+    return 1/(np.sqrt(2*np.pi)*sigma) * np.exp(-1 * 0.5 * ((x-mu)/sigma)**2)
+
+def prob_linking_length(g1, g2, b_perp, b_los, s, Pth, return_val=False):
+    """
+    Determine whether two galaxies are satisfy the linking-length condition for a probability FOF approach. Two galaxies are considered 
+    friends if bperp*s <= dist_perp AND
+                
+                prob (|z2 - z1| <= dist_los) = \int_0^\infty dz G_1(z) \int_{z-dist_los}^{z+dist_los} G_2(z')dz' >= P_{th},
+                
+    where P_{th} is the threshold probability level, and where G_1 and G_2 are the probability distribution functions for galaxies #1 and #2.
+    Here we assume that G1 and G2 take the form of a Gaussian distribution with their centroids defined by the measured redshifts, and their
+    sigmas taken as the redshift error bar. This implementation is suited for analyses of galaxies belonging to volume-limited data sets,
+    or generally those in which the linking lengths bear no redshift-dependence.
     
+    Note: The above integral is computed using `scipy.integrate.quad`, which is an extension of the algorithm `QUADPACK` from Fortran 77 library.
+    When error bars are small, the Gaussian approaches a Delta distribution. Since the region of interest is much smaller than the integration window,
+    we divide the integral into three pieces: up to -5*sigma of G1, over the distribution, and then 5*sigma of G1 to z -> infinity. We approximate
+    infinite redshift to be z~20 to save computation time.
+    
+    
+    Arguments:
+        g1, g2 (type fof.galaxy): two galaxies to compare.
+        b_perp (float): perpendicular linking constant
+        b_los (float): line-of-sight linking constant
+        s (float): mean separation between galaxies, computed as s = (N/V)**(-1/3).
+        Pth (float): threshold probability for what constitutes group membership. Argument must be on interval (0,1).
+        return_val (bool, default False): If True, return the integrated probability, rather than the boolean P > Pth.
+    Returns:
+        Boolean value indicating whether the two galaxies satisfy the linking-length condition.
+        If return_val==True, return total integrated probability, P.
+    """
+    # Test perpendicular linking condition
+    DPERP = d_perp(g1, g2)
+    cond1 = (DPERP <= b_perp * s)
+   
+    
+    # Line of sight linking condition
+    H0 = 100.
+    c = 3.00e5
+    VL = b_los * s
+    VL = VL * H0/c # convert to redshift units
+    
+    # Write the inside function F(z)
+    F = lambda z: 0.5*erf((z+VL-g2.cz/c)/(np.sqrt(2)*g2.czerr/c)) - 0.5*erf((z-VL-g2.cz/c)/(np.sqrt(2)*g2.czerr/c)) 
+
+    # Write down integrand I(z), integrate in pieces to get probability
+    I = lambda z:  gauss(z, g1.cz/c, g1.czerr/c) * F(z)
+
+    val1 = quad(I, 0, g1.cz/c - 3*g1.czerr/c)
+    val2 = quad(I, g1.cz/c -3 * g1.czerr/c, g1.cz/c + 3*g1.czerr/c)
+    val3 = quad(I, g1.cz/c + 3*g1.czerr/c, 20)
+
+    val = val1[0] + val2[0] + val3[0]
+    cond2 = (val > Pth)
+    
+    if return_val: 
+        return val
+
+    if (cond1 and cond2):
+        return True
+    else:
+        return False
+    
+
+def prob_fof(gxs, bperp, blos, s, Pth, printConf=True):
+    """
+    Conduct a probability friends-of-friends (PFoF) analysis on a list of galaxies using the method of Liu et al. (2008).
+    In the PFoF approach, two galaxies are considered friends if bperp * s <= dist_perp and 
+    
+         prob (|z2 - z1| <= dist_los) = \int_0^\infty dz G_1(z) \int_{z-dist_los}^{z+dist_los} G_2(z')dz' >= P_{th},
+                
+    where P_{th} is the threshold probability level, and where G_1 and G_2 are the probability distribution functions for galaxies #1 and #2.
+    Here we assume that G1 and G2 take the form of a Gaussian distribution with their centroids defined by the measured redshifts, and their
+    sigmas taken as the redshift error bar. This implementation is suited for analyses of galaxies belonging to volume-limited data sets,
+    or generally those in which the linking lengths bear no redshift-dependence. This function also requires that each galaxy in `gxs` has a 
+    unique name at `galaxy.name.`
+    
+    Arguments:
+        gxs (iterable, elements: type fof.galaxy): list of galaxies within which to identify to groups.
+        bperp (float): perpendicular linking constant
+        blos (float): line-of-sight linking constant
+        s (float): mean-separation between galaxies
+        Pth (float): threshold probability for what constitutes to friendship between a given pair of galaxies. As Pth -> 1, the group catalog approaches
+            that of conventional friends-of-friends.
+        printConf (bool, default True): bool indicating whether to print a written confirmation that group finding is complete. Default True.
+    Returns:
+        None. The algorithm assigns a unique, nonzero group ID number to every galaxy in `gxs.`
+    
+    """
+    grpindex = 1
+    reset_groups(gxs)
+    for g1, g2 in itertools.product(gxs, gxs):
+            if (g1.name != g2.name): 
+                if prob_linking_length(g1, g2, bperp, blos, s, Pth): 
+                        
+                    # Case 1: galaxies already in same group
+                    if ((g1.groupID == g2.groupID) and (g1.groupID != 0) and (g2.groupID !=0)):
+                        pass
+                    # Case 2: g1 is in already in a group, but g2 is not. Put g2 in the group of g1.
+                    elif ((g1.groupID != g2.groupID) and (g1.groupID != 0) and (g2.groupID == 0)):
+                        g2.set_groupID(g1.groupID)
+                    # Case 3: g2 is already in a group, but g1 is not. Put g1 in the group of g2.
+                    elif ((g1.groupID != g2.groupID) and (g1.groupID == 0) and (g2.groupID != 0)):
+                        g1.set_groupID(g2.groupID)
+                    # Case 4: Neither in a group; make a new group.
+                    elif ((g1.groupID == 0) and (g2.groupID == 0)):
+                        g2.set_groupID(grpindex)
+                        g1.set_groupID(grpindex)
+                        grpindex += 1
+                    # Case 5: g2 and g1 are already identified into groups, but they are still satisfying the linking length. Merge their groups.
+                    elif ((g1.groupID != g2.groupID) and (g1.groupID != 0) and (g2.groupID != 0)):
+                        keeping_id = g1.groupID
+                        equiv_id = g2.groupID
+                        for g in gxs:
+                            if g.groupID == equiv_id:
+                                g.set_groupID(keeping_id)
+                    else:
+                        # Should never get here.
+                        print("WARNING: These galaxies failed the PFOF algorithm!")
+                        print(g1.groupID == g2.groupID)
+                        print(g1.groupID, g2.groupID)
+                        #print(g2.name, g2.groupID)
+                else:
+                    pass
+            else:
+                pass
+    # The group finding for nonsingular groups is now done. Now, just make all 
+    # which were not identified into single-galaxy groups.
+    for i,g in enumerate(gxs):
+        if g.groupID == 0:
+            g.set_groupID(grpindex + i)
+    if printConf:
+        print("PFoF group-finding complete.")
+        
 
 
 

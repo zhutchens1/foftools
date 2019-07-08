@@ -4,10 +4,11 @@
 This package was written to include a variety of computational tools for performing friends-of-friends group identification analyses, especially as related to the RESOLVE/ECO surveys (Kannappan et al. 2011, Moffett et al. 2015). Thus, the following tools are best suited in applications to volume-limited surveys with order 100 - 10,000 sample galaxies. For RESOLVE and ECO, analyses of the friends-of-friends group finding is reported in Eckert et al. 2016.
 
 ## Using foftools
-There are three key pieces of code in the package:
+There are four key pieces of code in the package:
 1. the `fof.galaxy` class, for storing galaxies and their properties and associated methods
 2. the `fof.galaxy_fof` function, an implementation of the friends-of-friends algorithm for a list of galaxies.
-3. the `fof.group` class, for storing groups and their properties and associated methods
+3. the `fof.prob_fof` function, an implementation of the probability friends-of-friends algorithm for a list of galaxies.
+4. the `fof.group` class, for storing groups and their properties and associated methods
 
 
 ### Galaxies

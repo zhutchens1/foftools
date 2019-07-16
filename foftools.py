@@ -114,6 +114,7 @@ class galaxy(object):
         Arguments: cz (float)
         Returns: None
         """
+        c = 3.00e+05
         self.cz = cz
         self.comovingdist = cosmo.comoving_distance(self.cz / c)
 
@@ -794,7 +795,7 @@ def print_count(grps):
 # IO functions
 
     
-def catalog_to_txt(grparr, savename):
+def catalog_to_txt(gxs, savename):
     """Write the group catalog to text file. The function formats the text file by printing
     a group (id, # members, and central properties) and then printing every member galaxy
     of that group (ra, dec, magnitude, etc.)
@@ -804,13 +805,7 @@ def catalog_to_txt(grparr, savename):
     Returns: none. Saves file to specified directory.
     
     """
-    f = open(savename, 'w+')
-    for G in grparr:
-        f.write(G.__str__() + '\n')
-        for g in G.members:
-            f.write(g.__str__() + '\n')
-    f.close()
-
+    pass # under construction!
 
 
 
@@ -847,5 +842,23 @@ def array_to_pandas(grparr, savename=None):
     return df
 
 
+
+def arrays_to_galaxies(names, ras, decs, czs, mags, mag_floor=99, czmin=-1, czmax=99999999):
+    gxs = []
+    for i,e in enumerate(names):
+        if mags[i] <= mag_floor:
+            gxs.append(galaxy(e, ras[i], decs[i], czs[i], mags[i]))
+
+    return gxs
+
+
+def groups_to_haminput(grps, savename):
+    f = open(savename, 'w')
+
+    for G in grps:
+        rav, decv = G.get_sky_coords()
+        f.write("G\t{a}\t{b}\t{c}\t{d}\t{e}\t{f}\t{g}\t{h}\n".format(a=int(G.groupID),b=rav, c=decv, d=G.get_cen_cz(), e=G.n, f=G.get_cz_disp(), g=G.get_proj_radius(), h=G.get_total_mag()))
+
+    f.close()
 
 

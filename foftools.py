@@ -116,7 +116,8 @@ class galaxy(object):
         """
         c = 3.00e+05
         self.cz = cz
-        self.comovingdist = cosmo.comoving_distance(self.cz / c)
+        z = cz / c
+        self.comovingdist = cosmo.comoving_distance(np.float64(z)).value
 
     def get_logMbary(self):
         try:

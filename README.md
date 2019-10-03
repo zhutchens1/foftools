@@ -13,10 +13,10 @@ There are four key pieces of code in the package:
 
 ### Galaxies
 The galaxies class allows for the storing of entire galaxies and their properties into a single data type.
-Suppose we have a galaxy `test01` with RA and declination (195, 28) degrees, and with absolute magnitude -18.0 and redshift 5000 km/s. We can then initialize the galaxy to `x` as
+Suppose we have a galaxy `test01` with RA and declination (51, 28) degrees, and with absolute magnitude -18.0 and redshift 5000 km/s. We can then initialize the galaxy to `x` as
 ```
 import foftools as fof
-x = fof.galaxy("test01", 195, 28, 5000, -18.0)
+x = fof.galaxy("test01", 51, 28, 5000, -18.0)
 ```
 
 The FOF algorithm is sensitive to RA and declination values, so we encourage users to implement higher-precision coordinate values for group-finding purposes. With the class instance, we can also pass a boolean flag to each galaxy for various purposes under the property `fof.galaxy.fl`. The group ID number for a galaxy defaults to zero, as it assumes that galaxies have not yet been sorted into groups, but this can also be initialized through the `fof.galaxy.groupID` property. The initialization attributes are:

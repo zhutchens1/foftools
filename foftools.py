@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 package 'foftools'
-@author: Zackary L. Hutchens - UNC-CH
-v3.0 August 15, 2019.
+@author: Zackary L. Hutchens, UNC Chapel Hill
 
 This package contains classes and functions for performing galaxy group
 identification using the friends-of-friends (FoF) and probability friends-of-friends

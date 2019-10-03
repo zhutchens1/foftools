@@ -2,12 +2,12 @@
 """
 package 'foftools'
 @author: Zackary L. Hutchens - UNC-CH
-v2.0 July 8, 2019.
+v3.0 August 15, 2019.
 
 This package contains classes and functions for performing galaxy group
 identification using the friends-of-friends (FoF) and probability friends-of-friends
 (PFoF) algorithms, as well class structures for working with galaxies and groups as
-their own data types.:wq
+their own data types.
 """
 
 # Needed packages
@@ -16,18 +16,24 @@ import pandas as pd
 import itertools
 from scipy.integrate import quad
 from math import erf
+import scipy.stats as stats
+from copy import deepcopy
+
+
+__versioninfo__ = "FoFtools version 3.0, October 2019."
 
 from astropy.cosmology import LambdaCDM
-cosmo = LambdaCDM(H0=100.0, Om0=0.3, Ode0=0.7)
+cosmo = LambdaCDM(H0=100.0, Om0=0.3, Ode0=0.7) # this puts everything in "per h" units.
+SPEED_OF_LIGHT = 3.00E+05 # km/s
 
 #####################################################################
 #####################################################################
 #####################################################################
-
-
 
 class galaxy(object):
-    """ class `galaxy`
+    """ 
+    -----------------
+    class `galaxy`
     A python class for a galaxy data type, which stores information such as the
     name, position, redshift, and magnitude.
 
@@ -42,22 +48,24 @@ class galaxy(object):
         logMgas (float):        logarithmic gas mass of the galaxy (default None.)
         logMstar (float):       logarithmic stellar mass of the galaxy (default None.)
         czerr (float):          1-sigma uncertainty in cz measurement `cz.` Needed for probability FoF (default None).
+        assoc (int):            1/0 flag indicating whether galaxy was added to its group by association (default None, see `foftools.associate_galaxies`).
+        
 
     Properties:
         phi (float):            azimuthal angle (ra) in radians
         theta (float):          polar angle (90 deg - dec) in radians
         x,y,z (float):          Cartesian-like angular coordinates in the sky.
-        comovingdist (float):   line-of-sight comoving distance to the galaxy in Mpc/h. Assumes H0 = 100, OmegaM = 0.3, OmegaDE = 0.7.
+        comovingdist (float):   line-of-sight comoving distance to the galaxy in Mpc/h. (Assumes H0 = 100, OmegaM = 0.3, OmegaDE = 0.7.)
 
     Methods:
         get_groupID:    returns group ID number
         set_groupID:    sets group ID number
-        get_cz:         returns group-corrected velocity [km/s]
-        set_cz:         sets group-corrected velocity [km/s] and associated comoving distance [Mpc/h]
+        get_cz:         returns local group-corrected velocity [km/s]
+        set_cz:         sets local group-corrected velocity [km/s] and associated comoving distance [Mpc/h]
         get_logMbary:   return the logarithmic baryonic mass of the galaxy (stellar + gas).
-    
+    -----------------
     """
-    def __init__(self, name, ra, dec, cz, mag, fl=None, groupID=0, logMstar=None, logMgas=None, czerr=None, **kwargs):
+    def __init__(self, name, ra, dec, cz, mag, fl=None, groupID=0, logMstar=None, logMgas=None, czerr=None, assoc=None, **kwargs):
         # Basic properties
         self.name = name
         self.ra = np.float128(ra) # degrees
@@ -69,6 +77,7 @@ class galaxy(object):
         self.logMstar = logMstar
         self.logMgas = logMgas
         self.czerr = czerr
+        self.assoc = assoc
         self.__dict__.update(kwargs)
 
         # Spherical coordinates
@@ -81,7 +90,7 @@ class galaxy(object):
         self.y = np.sin(self.theta)*np.sin(self.phi)
         self.z = np.cos(self.theta)
 
-        z = self.cz / 3.00e+05
+        z = self.cz / SPEED_OF_LIGHT
         self.comovingdist = cosmo.comoving_distance(np.float64(z)).value
 
     def get_groupID(self):
@@ -114,7 +123,7 @@ class galaxy(object):
         Arguments: cz (float)
         Returns: None
         """
-        c = 3.00e+05
+        c = SPEED_OF_LIGHT
         self.cz = cz
         z = cz / c
         self.comovingdist = cosmo.comoving_distance(np.float64(z)).value
@@ -134,7 +143,9 @@ class galaxy(object):
 
     
 class group(object):
-    """ class `group`
+    """
+    -----------------
+    class `group`
     A Python class for a galaxy group.
 
     Initialaization parameters:
@@ -153,10 +164,11 @@ class group(object):
         get_cz_disp:        return cz dispersion computed from all group members in km/s.
         get_int_logMstar:   return group-integrated logarithmic stellar mass.
         get_int_logMbary:   return group-integrated logarithmic baryonic mass.
-        to_df:          obtain the members of the group as a pandas dataframe. Gives the option to save to csv by specifying a path to `savename`.
+        to_df               obtain the members of the group as a pandas dataframe. Gives the option to save to csv by specifying a path to `savename`.
         
     WARNING: Always use the the group.add_member() method to add galaxies to the group.
     Doing, e.g., group.members.append(...) will not update the group.n property.
+    -----------------
     """
     def __init__(self, groupID, **kwargs):
         self.groupID = groupID
@@ -398,7 +410,14 @@ def d_perp(x, glxy):
     Returns: Dperp in Mpc/h (type float)
     """
     theta_ij = ang_sep(x, glxy)
+    half_angle = theta_ij / 2.0
+    
     return (x.comovingdist + glxy.comovingdist)*np.sin(theta_ij / 2.0)
+    #g1_transvcm = cosmo.comoving_transverse_distance(np.float64(glxy.cz/SPEED_OF_LIGHT)).value * half_angle
+    #g2_transvcm = cosmo.comoving_transverse_distance(np.float64(x.cz/SPEED_OF_LIGHT)).value * half_angle
+    
+    #return (g1_transvcm + g2_transvcm)
+    return (x.cz+glxy.cz)/100. * np.sin(theta_ij / 2.0)
 
 def d_los(x, glxy):
     """Compute the line-of-sight separation between galaxies (Berlind et al. 2006).
@@ -406,23 +425,6 @@ def d_los(x, glxy):
     Returns: Dlos in Mpc/h (type float)
     """
     return np.abs(x.comovingdist - glxy.comovingdist)
-
-def linking_length(g1, g2, b_perp, b_para, s):
-    """Determine whether two galaxies are within the linking length.
-    Arguments: 
-        g1, g2 (type galaxy): two galaxies to compare.
-        b_perp (float): perpendicular linking constant
-        b_para (float): parallel/line-of-sight linking constant
-        s (float): mean separation between galaxies
-    Returns: Bool. Indicates whether the two galaxies are within a linking length apart.
-    """
-    DPERP = d_perp(g1, g2)
-    DLOS = d_los(g1, g2)
-    
-    if ((DPERP <= b_perp*s) and (DLOS <= b_para*s)):
-        return True
-    else:
-        return False
     
 
 def reset_groups(gxs):
@@ -453,32 +455,63 @@ def within_velocity_range(czmin, czmax, *gxs):
             x = True
     return x
 
+def in_same_group(g1, g2):
+    """
+    Check if two galaxies are in the same identified group.
+    Arguments:
+        g1, g2 (type galaxy): galaxies to compare
+    Return:
+        Bool indicating whether galaxies belong to same group.
+    """
+    if (g1.groupID == g2.groupID) and (g1.groupID != 0) and (g2.groupID != 0):
+        return True
+    else:
+        return False
+
 
 
 ####################################################################
 ####################################################################
 ####################################################################
+# Conventional FoF    
 
-
-
+def linking_length(g1, g2, b_perp, b_para, s):
+    """Determine whether two galaxies are within the linking length.
+    Arguments: 
+        g1, g2 (type galaxy): two galaxies to compare.
+        b_perp (float): perpendicular linking constant
+        b_para (float): parallel/line-of-sight linking constant
+        s (float): mean separation between galaxies
+    Returns: Bool. Indicates whether the two galaxies are within a linking length apart.
+    """
+    DPERP = d_perp(g1, g2)
+    DLOS = d_los(g1, g2)
+    
+    if ((DPERP <= b_perp*s) and (DLOS <= b_para*s)):
+        return True
+    else:
+        return False
 
 def galaxy_fof(gxs, bperp, blos, s, printConf=True):
-    """Perform a friends-of-friends group finding on an array of galaxies, as
-    based on the method of Berlind et al. 2006. The luminosity floor needs to be
-    implemented prior to using this function, so that gxs contains only galaxies 
-    brigther than the magnitude floor and within the desired redshift range.
+    """
+    -----------------
+    Perform a friends-of-friends group finding on an array of galaxies,
+    based on the method of Berlind et al. 2006. For volume-limited samples, the 
+    luminosity floor needs to be implemented prior to using this function, so that
+    gxs contains only galaxies brigther than the magnitude floor and within the 
+    desired redshift range.
     Arguments:
-        gxs (array-like, elements: type galaxy): array of galaxies to group with FOF
-        bperp (float): perpendicular linking constant; for ECO, use 0.07.
-        blos (float): line-of-sight linking constant; for ECO, use 1.1.
-        s (float): mean separation between galaxies. Calculated as n**(-1/3),
-            where n = N/V.
+        gxs (iterable, elements: type galaxy): array of galaxies to group with FOF
+        bperp (float or callable): perpendicular linking constant; for ECO, use 0.07. If callable, must be a only a function of redshift `z`
+        blos (float or callable): line-of-sight linking constant; for ECO, use 1.1. If callable, must be a only a function of redshift `z`
+        s (float or callable): mean separation between galaxies. Calculated as n**(-1/3), where n = N/V. If callable, must be a only a function of redshift `z`.
         printConf (bool, default True): if True, print a confirmation that FOF is complete.
     
     Returns:
         None. The algorithm creates unique group ID numbers for every identified
         group, including "single-galaxy groups." It sends these ID's to the galaxy.groupID
         attribute for every element in the gxs argument.
+    -----------------
     """
     # Establish counter
     grpindex = 1
@@ -486,10 +519,154 @@ def galaxy_fof(gxs, bperp, blos, s, printConf=True):
     # Reset the group array
     reset_groups(gxs)
     
+    # Check if s is scalar or callable
+    if np.isscalar(s):
+        sepf = lambda x: s
+    elif callable(s):
+        sepf = s
+    else:
+        raise ValueError('Argument `s` must be scalar or callable. If callable, s must be only a function of z.')
+        
+    # Check if bperp, blos are scalar or callble
+    if np.isscalar(bperp):
+        bperpf = lambda x: bperp
+    elif callable(bperp):
+        bperpf = bperp
+    else:
+        raise ValueError('Argument `bperp` must be scalar or callable. If callable, s must be only a function of z.')
+        
+    if np.isscalar(blos):
+        blosf = lambda x: blos
+    elif callable(blos):
+        blosf = blos
+    else:
+         raise ValueError('Argument `blos` must be scalar or callable. If callable, s must be only a function of z.')
+    
     # Identify the groups
+    c = SPEED_OF_LIGHT
     for g1, g2 in itertools.product(gxs, gxs):
         if (g1.name != g2.name):
-            if linking_length(g1, g2, bperp, blos, s):
+            if linking_length(g1, g2, bperpf(g1.cz/c), blosf(g1.cz/c), sepf(g1.cz/c)):
+                    
+                # Case 1: Galaxies already in the same group
+                if ((g1.groupID == g2.groupID) and (g1.groupID != 0) and (g2.groupID != 0)):
+                    pass
+
+                # Case 2: g1 is already in a group, but g2 is not. Put g2 in the group of g1.
+                elif ((g1.groupID != g2.groupID) and (g1.groupID != 0) and (g2.groupID == 0)):
+                    g2.set_groupID(g1.groupID)
+                    
+                # Case 3: g2 is already in a group, but g1 is not. Put g1 in the group of g2.
+                elif ((g1.groupID != g2.groupID) and (g1.groupID == 0) and (g2.groupID != 0)):
+                    g1.set_groupID(g2.groupID)
+                    
+                # Case 4: Neither of them are in a group. Make a new group.
+                elif ((g1.groupID == 0) and (g2.groupID == 0)):
+                    g2.set_groupID(grpindex)
+                    g1.set_groupID(grpindex)
+                    grpindex += 1
+                # Case 5: g2 and g1 are already identified into groups, but they are still
+                # within a linking length of one another. In that case, we need to link their
+                # groups together.
+                elif ((g1.groupID != g2.groupID) and (g1.groupID !=0) and (g2.groupID != 0)):
+                    keeping_id = g1.groupID
+                    equiv_id = g2.groupID
+                    for g in gxs:
+                        if g.groupID == equiv_id:
+                            g.set_groupID(keeping_id)   
+                else:
+                    # Should be nothing here!
+                    print('WARNING: These galaxies failed the group-finding algorithm.')
+                    print(g1)
+                    print(g2)
+            else:
+                pass
+        else:
+            pass
+    # The group finding for nonsingular groups is done. Now, just need to make all
+    # which were not idenfied into single galaxy groups.
+    for i,g in enumerate(gxs):
+        if g.groupID == 0:
+            g.set_groupID(grpindex + i)
+    if printConf:        
+        print("FOF Group finding complete.")
+
+
+
+
+####################################################################
+####################################################################
+####################################################################
+# Eke et al. FoF
+def eke_linking_length(g1, g2, b_perp, b_para, s):
+    """
+    Determine whether two galaxies are friends using the linking length criteria of 
+    Eke et al. 2004, MNRAS 348, 866.
+    """
+    c = SPEED_OF_LIGHT
+    
+    #print(type(b_perp), type(b_para), type(s))
+    cond1 = np.abs(g1.comovingdist - g2.comovingdist) <= (b_para(g1.cz/c)*s(g1.cz/c) + b_para(g2.cz/c)*s(g2.cz/c))
+    angle = ang_sep(g1, g2) # in rad
+    cond2 = angle <= 0.5*(b_perp(g1.cz/c)*s(g1.cz/c)/g1.comovingdist + b_perp(g2.cz/c)*s(g2.cz/c)/g2.comovingdist)  
+    
+    return (cond1 and cond2)
+
+def eke_fof(gxs, bperp, blos, s, printConf=True):
+    """
+    -----------------
+    Perform a friends-of-friends group finding on an array of galaxies,
+    based on the method of Eke et al (2004). For volume-limited samples, the 
+    luminosity floor needs to be implemented prior to using this function, so that
+    gxs contains only galaxies brigther than the magnitude floor and within the 
+    desired redshift range.
+    Arguments:
+        gxs (iterable, elements: type galaxy): array of galaxies to group with FOF
+        bperp (float or callable): perpendicular linking constant; for ECO, use 0.07. If callable, must be a only a function of redshift `z`
+        blos (float or callable): line-of-sight linking constant; for ECO, use 1.1. If callable, must be a only a function of redshift `z`
+        s (float or callable): mean separation between galaxies. Calculated as n**(-1/3), where n = N/V. If callable, must be a only a function of redshift `z`.
+        printConf (bool, default True): if True, print a confirmation that FOF is complete.
+    
+    Returns:
+        None. The algorithm creates unique group ID numbers for every identified
+        group, including "single-galaxy groups." It sends these ID's to the galaxy.groupID
+        attribute for every element in the gxs argument.
+    -----------------
+    """
+    # Establish counter
+    grpindex = 1
+    
+    # Reset the group array
+    reset_groups(gxs)
+    
+    # Check if s is scalar or callable
+    if np.isscalar(s):
+        sepf = lambda x: s
+    elif callable(s):
+        sepf = s
+    else:
+        raise ValueError('Argument `s` must be scalar or callable. If callable, s must be only a function of z.')
+        
+    # Check if bperp, blos are scalar or callble
+    if np.isscalar(bperp):
+        bperpf = lambda x: bperp
+    elif callable(bperp):
+        bperpf = bperp
+    else:
+        raise ValueError('Argument `bperp` must be scalar or callable. If callable, s must be only a function of z.')
+        
+    if np.isscalar(blos):
+        blosf = lambda x: blos
+    elif callable(blos):
+        blosf = blos
+    else:
+         raise ValueError('Argument `blos` must be scalar or callable. If callable, s must be only a function of z.')
+    
+    # Identify the groups
+    c = SPEED_OF_LIGHT
+    for g1, g2 in itertools.product(gxs, gxs):
+        if (g1.name != g2.name):
+            if eke_linking_length(g1, g2, bperpf, blosf, sepf): # add arguments back in
                     
                 # Case 1: Galaxies already in the same group
                 if ((g1.groupID == g2.groupID) and (g1.groupID != 0) and (g2.groupID != 0)):
@@ -533,9 +710,8 @@ def galaxy_fof(gxs, bperp, blos, s, printConf=True):
         if g.groupID == 0:
             g.set_groupID(grpindex + i)
     if printConf:        
-        print("FOF Group finding complete.")
-        
-        
+        print("Eke FOF Group finding complete.")
+
 ###################################################################
 ####################################################################
 ####################################################################
@@ -555,15 +731,15 @@ def gauss(x, mu, sigma):
 
 def prob_linking_length(g1, g2, b_perp, b_los, s, Pth, return_val=False):
     """
-    Determine whether two galaxies are satisfy the linking-length condition for a probability FOF approach. Two galaxies are considered 
+    -----------------
+    Determine whether two galaxies satisfy the linking-length condition for a probability FOF approach. Two galaxies are considered 
     friends if bperp*s <= dist_perp AND
                 
                 prob (|z2 - z1| <= dist_los) = \int_0^\infty dz G_1(z) \int_{z-dist_los}^{z+dist_los} G_2(z')dz' >= P_{th},
                 
     where P_{th} is the threshold probability level, and where G_1 and G_2 are the probability distribution functions for galaxies #1 and #2.
     Here we assume that G1 and G2 take the form of a Gaussian distribution with their centroids defined by the measured redshifts, and their
-    sigmas taken as the redshift error bar. This implementation is suited for analyses of galaxies belonging to volume-limited data sets,
-    or generally those in which the linking lengths bear no redshift-dependence.
+    sigmas taken as the redshift error bar.
     
     Note: The above integral is computed using `scipy.integrate.quad`, which is an extension of the algorithm `QUADPACK` from Fortran 77 library.
     When error bars are small, the Gaussian approaches a Delta distribution. Since the region of interest is much smaller than the integration window,
@@ -581,6 +757,7 @@ def prob_linking_length(g1, g2, b_perp, b_los, s, Pth, return_val=False):
     Returns:
         Boolean value indicating whether the two galaxies satisfy the linking-length condition.
         If return_val==True, return total integrated probability, P.
+    -----------------
     """
     # Test perpendicular linking condition
     DPERP = d_perp(g1, g2)
@@ -588,10 +765,10 @@ def prob_linking_length(g1, g2, b_perp, b_los, s, Pth, return_val=False):
    
     
     # Line of sight linking condition
-    H0 = 100.
-    c = 3.00e5
+    c = SPEED_OF_LIGHT
+    H = cosmo.H(g1.cz/c).value
     VL = b_los * s
-    VL = VL * H0/c # convert to redshift units
+    VL = VL * H/c # convert to redshift units
     
     # Write the inside function F(z)
     F = lambda z: 0.5*erf((z+VL-g2.cz/c)/(np.sqrt(2)*g2.czerr/c)) - 0.5*erf((z-VL-g2.cz/c)/(np.sqrt(2)*g2.czerr/c)) 
@@ -613,10 +790,11 @@ def prob_linking_length(g1, g2, b_perp, b_los, s, Pth, return_val=False):
         return True
     else:
         return False
-    
+
 
 def prob_fof(gxs, bperp, blos, s, Pth, printConf=True):
     """
+    -----------------
     Conduct a probability friends-of-friends (PFoF) analysis on a list of galaxies using the method of Liu et al. (2008).
     In the PFoF approach, two galaxies are considered friends if bperp * s <= dist_perp and 
     
@@ -630,21 +808,46 @@ def prob_fof(gxs, bperp, blos, s, Pth, printConf=True):
     
     Arguments:
         gxs (iterable, elements: type fof.galaxy): list of galaxies within which to identify to groups.
-        bperp (float): perpendicular linking constant
-        blos (float): line-of-sight linking constant
-        s (float): mean-separation between galaxies
+        bperp (float or callable): perpendicular linking constant
+        blos (float or callable): line-of-sight linking constant
+        s (float or callable): mean-separation between galaxies
         Pth (float): threshold probability for what constitutes to friendship between a given pair of galaxies. As Pth -> 1, the group catalog approaches
             that of conventional friends-of-friends.
         printConf (bool, default True): bool indicating whether to print a written confirmation that group finding is complete. Default True.
     Returns:
         None. The algorithm assigns a unique, nonzero group ID number to every galaxy in `gxs.`
-    
+    -----------------
     """
     grpindex = 1
     reset_groups(gxs)
+    
+    # Check if s is scalar or callable
+    if np.isscalar(s):
+        sepf = lambda x: s
+    elif callable(s):
+        sepf = s
+    else:
+        raise ValueError('Argument `s` must be scalar or callable. If callable, s must be only a function of z.')
+        
+    # Check if bperp, blos are scalar or callble
+    if np.isscalar(bperp):
+        bperpf = lambda x: bperp
+    elif callable(bperp):
+        bperpf = bperp
+    else:
+        raise ValueError('Argument `bperp` must be scalar or callable. If callable, s must be only a function of z.')
+        
+    if np.isscalar(blos):
+        blosf = lambda x: blos
+    elif callable(blos):
+        blosf = blos
+    else:
+         raise ValueError('Argument `blos` must be scalar or callable. If callable, s must be only a function of z.')
+    
+    c = SPEED_OF_LIGHT
     for g1, g2 in itertools.product(gxs, gxs):
-            if (g1.name != g2.name): 
-                if prob_linking_length(g1, g2, bperp, blos, s, Pth): 
+            if (g1.name != g2.name) and (not in_same_group(g1, g2)): 
+                if prob_linking_length(g1, g2, bperpf(g1.cz/c), blosf(g1.cz/c), sepf(g1.cz/c), Pth): 
                         
                     # Case 1: galaxies already in same group
                     if ((g1.groupID == g2.groupID) and (g1.groupID != 0) and (g2.groupID !=0)):
@@ -685,8 +888,112 @@ def prob_fof(gxs, bperp, blos, s, Pth, printConf=True):
     if printConf:
         print("PFoF group-finding complete.")
         
+####################################################################
+####################################################################
+####################################################################
+# Tools for faint galaxy association to FoF groups
+        
+def set_assoc_zero(gxs):
+    '''
+    Set the association case (bool) of each galaxy to zero.
+    '''
+    for g in gxs:
+        g.assoc = 0
+        
+def largerof(a, b):
+    return max([a,b])
 
 
+
+def faint_assoc(idgxs, faintgxs, grpids, rvir, vdisp, losll, ret_groups=True):
+    """
+    ----------
+    Associate faint galaxies below a specified floor back into groups on the condition of
+    Eckert et al. (2016). This algorithm will search for faint galaxies that can be associated to
+    friends-of-friends dark matter halos, storing this information to a property `foftools.galaxy.assoc.`
+    The current key for this parameter is:
+        1   faint galaxy, associated to a FoF halo.
+        0   bright galaxy, brigther than luminosity floor, already in a singular or nonsingular FoF halo.
+       -1   faint galaxy that was unable to associate to an existing FoF halo, now forming a single-galaxy group below the floor.
+        
+    
+    Arguments:
+        idgxs (iterable; elements: type galaxy) galaxies with identified group numbers, to be associated against.
+        faintgxs (iterable; elements: type galaxy) list of galaxies that are fainter than the magnitude floor.
+        grpids (iterable; elements: int) list of grpids output from HAM.
+        rvir (iterable, elements: float) virial radii from HAM
+        sigma (iterable, elements: float) velocity dispersion from HAM
+        losll (float or callable): line-of-sight linking length in Mpc/h
+    Returns:
+        GROUPS (iterable, elements: type group): groups with faint galaxies associated.
+    ----------
+    """
+    if np.isscalar(losll):
+        losllf = lambda x: losll
+    elif callable(losll):
+        losllf = losll
+    else:
+        raise ValueError("Argument `losll` must be scalar or callable.")
+    
+    set_assoc_zero(idgxs)
+    set_assoc_zero(faintgxs)
+    c = SPEED_OF_LIGHT
+    
+    idtargets = deepcopy(idgxs)
+    fainttargets = deepcopy(faintgxs)
+    
+    assert max(grpids)==max(idgxs, key=lambda g:g.groupID).groupID, "Argument `grpids` has different ID's than `idgxs`"
+    
+    for i,idv in enumerate(grpids):
+        grp = find_group(idtargets, idv)
+        Vdisp = vdisp[i]
+        
+        cra, cdec = grp.get_skycoords()
+        grpcenterfake = galaxy(name='grpcenter', ra=cra, dec=cdec, cz=grp.get_cen_cz(), mag=grp.get_total_mag())
+        
+        for fg in fainttargets:
+            Rp = d_perp(grpcenterfake, fg)
+            DeltaV = (fg.cz - grpcenterfake.cz)
+            tempratio = Rp/rvir[i]
+            condition = ((tempratio < 1) and (DeltaV < largerof(losllf(grpcenterfake.cz/c)*cosmo.H(grpcenterfake.cz/c).value, 3*Vdisp)))
+            
+            if fg.name=='rf0691' and idv==46:
+                pass
+                #print(tempratio, DeltaV, 3*Vdisp, losll*100, condition)
+            
+            if condition and (fg.assoc):
+                # this means that two groups are competing for a galaxy.
+                if tempratio < fg.radiusratio:
+                    fg.radisratio = tempratio
+                    fg.set_groupID(idv)
+                    fg.assoc=1
+                else:
+                    pass
+                    
+            elif condition and (not fg.assoc):
+                fg.radiusratio = tempratio
+                fg.set_groupID(idv)
+                fg.assoc = 1
+            elif (not condition):
+                pass
+            else:
+                print("WARNING: This faint galaxy failed the association algorithm", fg)
+                
+    maxidv = max(grpids)
+    i=100
+    for fg in fainttargets:
+        if not fg.assoc:
+            fg.set_groupID(maxidv+i)
+            fg.assoc = -1 
+            i += 1
+    
+    outgxs = list(np.concatenate([idtargets, fainttargets]))
+    if ret_groups:
+        return galaxy_to_group_arr(outgxs)
+    else:
+        return outgxs
+        
+    
 
 ####################################################################
 ####################################################################
@@ -845,21 +1152,99 @@ def array_to_pandas(grparr, savename=None):
 
 
 def arrays_to_galaxies(names, ras, decs, czs, mags, mag_floor=99, czmin=-1, czmax=99999999):
+    """
+    Form a series of arrays into a list of galaxies. Does not currently support reading in of
+    external group ID numbers.
+    Arguments:
+        names (iterable, elements: string): names of galaxies
+        ras (iterable, elements: float): RA's of each galaxy in decimal degrees
+        decs (iterable, elements: float) Dec's of each galaxy in decimal degrees
+        czs (iterable, elements: float) velocities of each galaxy in km/s.
+        mags (iterable, elements: float): absolute magnitude of each galaxy.
+        mag_floor (float, default 99): magnitude floor on which to choose galaxies added to list.
+    Returns:
+        gxs (list, elements: type galaxy) list of galaxies formed of input arrays.
+    """
+    names = np.array(names)
+    ras = np.array(ras)
+    decs = np.array(decs)
+    czs = np.array(czs)
+    mags = np.array(mags)
     gxs = []
     for i,e in enumerate(names):
         if mags[i] <= mag_floor:
             gxs.append(galaxy(e, ras[i], decs[i], czs[i], mags[i]))
-
     return gxs
 
 
 def groups_to_haminput(grps, savename):
+    """
+    Output a group catalog in a format compatible with the HAM code of A. Berlind.
+    Arguments:
+        grps (iterable, elements: type group): list of groups to ouput to file.
+        savename (string): path to which the group catalog will be saved.
+    """
     f = open(savename, 'w')
-
     for G in grps:
         rav, decv = G.get_sky_coords()
         f.write("G\t{a}\t{b}\t{c}\t{d}\t{e}\t{f}\t{g}\t{h}\n".format(a=int(G.groupID),b=rav, c=decv, d=G.get_cen_cz(), e=G.n, f=G.get_cz_disp(), g=G.get_proj_radius(), h=G.get_total_mag()))
 
     f.close()
 
-
+####################################################################
+####################################################################
+####################################################################
+# Other tools
+    
+def inpointing(sequence, center_ra, center_dec, ldm0, D):
+    """
+    ---------------
+    Determine if a list of targets is with a given single-dish pointing. The dish diameter
+    is `D` and the pointing is centered on the rest wavelength `ldm0`.  
+    Arguments:
+        sequence (iterable, elements: type `galaxy` or `tuple`): list of targets to check. This argument can either be a list
+                    galaxy instances, or it could be a list of tuples (RA, Dec).
+        center_ra (float): RA of field center in decimal degrees.
+        center_dec (float): Declination of field center in decimal degrees.
+        ldm0 (float): rest-wavelength of pointing in meters (e.g., for HI emission use 0.21 m for the 21cm line.)
+        D (float): diameter of dish in meters.
+    Returns:
+        outseq (iterable): targets in the field, data types matching the elements `sequence.`
+    ---------------
+    """
+    outseq = []
+    if isinstance(sequence[0], galaxy):
+        for gal in sequence:
+            ra, dec = gal.ra, gal.dec
+            theta = 1.22 * ldm0 * (1 + gal.cz/SPEED_OF_LIGHT) /  D
+            R = theta/2.0 * 180/np.pi
+            
+            f = np.pi/180.0
+            cosr = np.sin(dec*f)*np.sin(center_dec*f) + np.cos(dec*f)*np.cos(center_dec*f)*np.cos((ra-center_ra)*f)
+            r = np.arccos(cosr) * 180/np.pi
+            
+            if r <= R:
+                outseq.append(gal)
+            else:
+                pass
+        return outseq
+    elif len(sequence[0])==2 and np.isscalar(sequence[0][0]):
+        for (ra, dec) in sequence:
+            theta = 1.22 * ldm0 * (1 + gal.cz/SPEED_OF_LIGHT) /  D
+            R = theta/2.0 * 180/np.pi
+            
+            f = np.pi/180.0
+            cosr = np.sin(dec*f)*np.sin(center_dec*f) + np.cos(dec*f)*np.cos(center_dec*f)*np.cos((ra-center_ra)*f)
+            r = np.arccos(cosr) * 180/np.pi
+            
+            if r <= R:
+                outseq.append(gal)
+            else:
+                pass
+        return outseq
+            
+    else:
+        raise ValueError("The elements of `sequence` must all be `galaxy` or `tuple` of length 2 (RA/Dec pair).")
+    
+    
+    

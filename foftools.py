@@ -411,12 +411,12 @@ def d_perp(x, glxy):
     theta_ij = ang_sep(x, glxy)
     half_angle = theta_ij / 2.0
     
-    return (x.comovingdist + glxy.comovingdist)*np.sin(theta_ij / 2.0)
-    #g1_transvcm = cosmo.comoving_transverse_distance(np.float64(glxy.cz/SPEED_OF_LIGHT)).value * half_angle
-    #g2_transvcm = cosmo.comoving_transverse_distance(np.float64(x.cz/SPEED_OF_LIGHT)).value * half_angle
+    #return (x.comovingdist + glxy.comovingdist)*np.sin(theta_ij / 2.0)
+    g1_transvcm = cosmo.comoving_transverse_distance(np.float64(glxy.cz/SPEED_OF_LIGHT)).value * half_angle
+    g2_transvcm = cosmo.comoving_transverse_distance(np.float64(x.cz/SPEED_OF_LIGHT)).value * half_angle
     
-    #return (g1_transvcm + g2_transvcm)
-    return (x.cz+glxy.cz)/100. * np.sin(theta_ij / 2.0)
+    return (g1_transvcm + g2_transvcm)
+    #return (x.cz+glxy.cz)/100. * np.sin(theta_ij / 2.0)
 
 def d_los(x, glxy):
     """Compute the line-of-sight separation between galaxies (Berlind et al. 2006).

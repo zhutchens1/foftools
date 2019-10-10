@@ -301,7 +301,7 @@ class group(object):
             if cosDpsi > 1:
                 print(self)
 
-            rp = sinDpsi * g.cz/(100.)
+            rp = sinDpsi * g.cz/cosmo.H(g.cz)
             Rproj += rp**2
             
         if self.n > 1:

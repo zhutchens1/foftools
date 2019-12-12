@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 package 'foftools'
-@author: Zackary L. Hutchens, UNC Chapel Hill
+@author: Zackary L. Hutchens - UNC-CH
+v3.0 August 15, 2019.
 
 This package contains classes and functions for performing galaxy group
 identification using the friends-of-friends (FoF) and probability friends-of-friends
@@ -91,6 +92,7 @@ class galaxy(object):
 
         z = self.cz / SPEED_OF_LIGHT
         self.comovingdist = cosmo.comoving_distance(np.float64(z)).value
+        self.transverse_comovingdist = cosmo.comoving_transverse_distance(np.float64(z)).value
 
     def get_groupID(self):
         """
@@ -301,7 +303,7 @@ class group(object):
             if cosDpsi > 1:
                 print(self)
 
-            rp = sinDpsi * g.cz/cosmo.H(g.cz)
+            rp = sinDpsi * g.cz/(100.)
             Rproj += rp**2
             
         if self.n > 1:
@@ -378,6 +380,7 @@ class group(object):
         except:
             raise IOError("File {} is invalid".format(savename))
         
+        df.columns=['name', 'radeg', 'dedeg', 'cz', 'absrmag', 'grp']
         # return the dataframe
         return df
         
@@ -408,15 +411,10 @@ def d_perp(x, glxy):
     Arguments: x (type galaxy), glxy (type galaxy).
     Returns: Dperp in Mpc/h (type float)
     """
-    theta_ij = ang_sep(x, glxy)
-    half_angle = theta_ij / 2.0
-    
-    #return (x.comovingdist + glxy.comovingdist)*np.sin(theta_ij / 2.0)
-    g1_transvcm = cosmo.comoving_transverse_distance(np.float64(glxy.cz/SPEED_OF_LIGHT)).value * half_angle
-    g2_transvcm = cosmo.comoving_transverse_distance(np.float64(x.cz/SPEED_OF_LIGHT)).value * half_angle
-    
+    half_angle = ang_sep(x, glxy) / 2.0
+    g1_transvcm = x.transverse_comovingdist * half_angle
+    g2_transvcm = glxy.transverse_comovingdist * half_angle
     return (g1_transvcm + g2_transvcm)
-    #return (x.cz+glxy.cz)/100. * np.sin(theta_ij / 2.0)
 
 def d_los(x, glxy):
     """Compute the line-of-sight separation between galaxies (Berlind et al. 2006).
@@ -726,9 +724,9 @@ def gauss(x, mu, sigma):
     Returns:
         PDF value evaluated at `x`
     """
-    return 1/(np.sqrt(2*np.pi)*sigma) * np.exp(-1 * 0.5 * ((x-mu)/sigma)**2)
+    return 1/((2*np.pi)**0.5 * sigma) * np.exp(-1 * 0.5 * ((x-mu)/sigma) * ((x-mu)/sigma))
 
-def prob_linking_length(g1, g2, b_perp, b_los, s, Pth, return_val=False):
+def prob_linking_length(g1, g2, perpll, losll, Pth, return_val=False):
     """
     -----------------
     Determine whether two galaxies satisfy the linking-length condition for a probability FOF approach. Two galaxies are considered 
@@ -743,55 +741,46 @@ def prob_linking_length(g1, g2, b_perp, b_los, s, Pth, return_val=False):
     Note: The above integral is computed using `scipy.integrate.quad`, which is an extension of the algorithm `QUADPACK` from Fortran 77 library.
     When error bars are small, the Gaussian approaches a Delta distribution. Since the region of interest is much smaller than the integration window,
     we divide the integral into three pieces: up to -5*sigma of G1, over the distribution, and then 5*sigma of G1 to z -> infinity. We approximate
-    infinite redshift to be z~20 to save computation time.
-    
-    
+    infinite redshift to be z~10 to save computation time.
     Arguments:
         g1, g2 (type fof.galaxy): two galaxies to compare.
-        b_perp (float): perpendicular linking constant
-        b_los (float): line-of-sight linking constant
-        s (float): mean separation between galaxies, computed as s = (N/V)**(-1/3).
-        Pth (float): threshold probability for what constitutes group membership. Argument must be on interval (0,1).
+        perpll (type float): perpendicular linking length in Mpc/h, usually computed as bperp * s, where s is the mean separation betwen galaxies in the search volume.
+        losll (type float): line-of-sight linking length, in km/s, usually computed as blos*s * H/c, where s is the mean separation between galaxies in the search volume.
+        Pth (float): threshold probability constituting group membership. Argument must be on interval (0,1).
         return_val (bool, default False): If True, return the integrated probability, rather than the boolean P > Pth.
     Returns:
         Boolean value indicating whether the two galaxies satisfy the linking-length condition.
         If return_val==True, return total integrated probability, P.
     -----------------
     """
-    # Test perpendicular linking condition
-    DPERP = d_perp(g1, g2)
-    cond1 = (DPERP <= b_perp * s)
-   
-    
     # Line of sight linking condition
     c = SPEED_OF_LIGHT
-    H = cosmo.H(g1.cz/c).value
-    VL = b_los * s
-    VL = VL * H/c # convert to redshift units
+    VL = losll/SPEED_OF_LIGHT
     
     # Write the inside function F(z)
-    F = lambda z: 0.5*erf((z+VL-g2.cz/c)/(np.sqrt(2)*g2.czerr/c)) - 0.5*erf((z-VL-g2.cz/c)/(np.sqrt(2)*g2.czerr/c)) 
-
+    #F = lambda z: 0.5*erf((z+VL-g2.cz/c)/((2**0.5)*g2.czerr/c)) - 0.5*erf((z-VL-g2.cz/c)/((2**0.5)*g2.czerr/c)) 
     # Write down integrand I(z), integrate in pieces to get probability
-    I = lambda z:  gauss(z, g1.cz/c, g1.czerr/c) * F(z)
+    I = lambda z:  gauss(z, g1.cz/c, g1.czerr/c) * (0.5*erf((z+VL-g2.cz/c)/((2**0.5)*g2.czerr/c)) - 0.5*erf((z-VL-g2.cz/c)/((2**0.5)*g2.czerr/c))) 
 
-    val1 = quad(I, 0, g1.cz/c - 3*g1.czerr/c)
-    val2 = quad(I, g1.cz/c -3 * g1.czerr/c, g1.cz/c + 3*g1.czerr/c)
-    val3 = quad(I, g1.cz/c + 3*g1.czerr/c, 20)
+    #val1 = quad(I, 0, g1.cz/c - 3*g1.czerr/c)
+    #val2 = quad(I, g1.cz/c -3 * g1.czerr/c, g1.cz/c + 3*g1.czerr/c)
+    #val3 = quad(I, g1.cz/c + 3*g1.czerr/c, np.inf)
 
-    val = val1[0] + val2[0] + val3[0]
-    cond2 = (val > Pth)
-    
+    val = quad(I, 0, 100, points=np.float64([g1.cz/c-3*g1.czerr/c, g1.cz/c, g1.cz/c+3*g1.czerr/c]))
+    val = val[0]
+    #print(val)
     if return_val: 
         return val
-
-    if (cond1 and cond2):
+    
+    #print(val)
+    # if both conditions satisifed, return True.
+    if ((d_perp(g1, g2) <= perpll) and (val > Pth)):
         return True
     else:
         return False
 
 
-def prob_fof(gxs, bperp, blos, s, Pth, printConf=True):
+def prob_fof(gxs, perpll, losll, Pth, printConf=True):
     """
     -----------------
     Conduct a probability friends-of-friends (PFoF) analysis on a list of galaxies using the method of Liu et al. (2008).
@@ -820,33 +809,27 @@ def prob_fof(gxs, bperp, blos, s, Pth, printConf=True):
     grpindex = 1
     reset_groups(gxs)
     
-    # Check if s is scalar or callable
-    if np.isscalar(s):
-        sepf = lambda x: s
-    elif callable(s):
-        sepf = s
+    # Check if perpll is scalar or callable
+    if np.isscalar(perpll):
+        perpf = lambda x: perpll
+    elif callable(perpll):
+        perpf = perpll
     else:
-        raise ValueError('Argument `s` must be scalar or callable. If callable, s must be only a function of z.')
+        raise ValueError('Argument `perpll` must be scalar or callable. If callable, s must be only a function of z.')
         
-    # Check if bperp, blos are scalar or callble
-    if np.isscalar(bperp):
-        bperpf = lambda x: bperp
-    elif callable(bperp):
-        bperpf = bperp
+    # Check if losll is scalar or callable
+    if np.isscalar(losll):
+        losf = lambda x: losll
+    elif callable(losll):
+        losf = losll
     else:
-        raise ValueError('Argument `bperp` must be scalar or callable. If callable, s must be only a function of z.')
+        raise ValueError('Argument `losll` must be scalar or callable. If callable, s must be only a function of z.')
         
-    if np.isscalar(blos):
-        blosf = lambda x: blos
-    elif callable(blos):
-        blosf = blos
-    else:
-         raise ValueError('Argument `blos` must be scalar or callable. If callable, s must be only a function of z.')
     
     c = SPEED_OF_LIGHT
     for g1, g2 in itertools.product(gxs, gxs):
             if (g1.name != g2.name) and (not in_same_group(g1, g2)): 
-                if prob_linking_length(g1, g2, bperpf(g1.cz/c), blosf(g1.cz/c), sepf(g1.cz/c), Pth): 
+                if prob_linking_length(g1, g2, perpf(g1.cz/c), losf(g1.cz/c), Pth): 
                         
                     # Case 1: galaxies already in same group
                     if ((g1.groupID == g2.groupID) and (g1.groupID != 0) and (g2.groupID !=0)):
@@ -872,13 +855,7 @@ def prob_fof(gxs, bperp, blos, s, Pth, printConf=True):
                     else:
                         # Should never get here.
                         print("WARNING: These galaxies failed the PFOF algorithm!")
-                        print(g1.groupID == g2.groupID)
-                        print(g1.groupID, g2.groupID)
-                        #print(g2.name, g2.groupID)
-                else:
-                    pass
-            else:
-                pass
+                        print(g1.name, g2.name)
     # The group finding for nonsingular groups is now done. Now, just make all 
     # which were not identified into single-galaxy groups.
     for i,g in enumerate(gxs):
@@ -886,6 +863,8 @@ def prob_fof(gxs, bperp, blos, s, Pth, printConf=True):
             g.set_groupID(grpindex + i)
     if printConf:
         print("PFoF group-finding complete.")
+        
+    return gxs
         
 ####################################################################
 ####################################################################
@@ -1185,7 +1164,7 @@ def groups_to_haminput(grps, savename):
     """
     f = open(savename, 'w')
     for G in grps:
-        rav, decv = G.get_sky_coords()
+        rav, decv = G.get_skycoords()
         f.write("G\t{a}\t{b}\t{c}\t{d}\t{e}\t{f}\t{g}\t{h}\n".format(a=int(G.groupID),b=rav, c=decv, d=G.get_cen_cz(), e=G.n, f=G.get_cz_disp(), g=G.get_proj_radius(), h=G.get_total_mag()))
 
     f.close()

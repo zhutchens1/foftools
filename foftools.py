@@ -766,7 +766,7 @@ def prob_linking_length(g1, g2, perpll, losll, Pth, return_val=False):
     #val2 = quad(I, g1.cz/c -3 * g1.czerr/c, g1.cz/c + 3*g1.czerr/c)
     #val3 = quad(I, g1.cz/c + 3*g1.czerr/c, np.inf)
 
-    val = quad(I, 0, 100, points=np.float64([g1.cz/c-5*g1.czerr/c,g1.cz/c-3*g1.czerr/c, g1.cz/c, g1.cz/c+3*g1.czerr/c, g1.cz/c+5*g1.czerr/c]), weight='cauchy', wvar=g1.cz/c)
+    val = quad(I, 0, 100, points=np.float64([g1.cz/c-5*g1.czerr/c,g1.cz/c-3*g1.czerr/c, g1.cz/c, g1.cz/c+3*g1.czerr/c, g1.cz/c+5*g1.czerr/c]))
     val = val[0]
     #print(val)
     if return_val: 

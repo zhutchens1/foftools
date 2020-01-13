@@ -2,7 +2,7 @@
 """
 package 'foftools'
 @author: Zackary L. Hutchens - UNC-CH
-v3.0 August 15, 2019.
+v3.1 January 13, 2020.
 
 This package contains classes and functions for performing galaxy group
 identification using the friends-of-friends (FoF) and probability friends-of-friends
@@ -10,17 +10,17 @@ identification using the friends-of-friends (FoF) and probability friends-of-fri
 their own data types.
 """
 
-# Needed packages
 import numpy as np
 import pandas as pd
 import itertools
 from scipy.integrate import quad
 from math import erf
-import scipy.stats as stats
 from copy import deepcopy
+import math
 
 
-__versioninfo__ = "FoFtools version 3.0, October 2019."
+__versioninfo__ = "FoFtools version 3.1, January 13 2020."
+__version_number__ = 3.1
 
 from astropy.cosmology import LambdaCDM
 cosmo = LambdaCDM(H0=100.0, Om0=0.3, Ode0=0.7) # this puts everything in "per h" units.
@@ -401,7 +401,7 @@ def ang_sep(x, glxy):
     Arguments: x (type galaxy), glxy (type galaxy).
     Returns: angular separation of two galaxies in the sky in radians (type float)
     """
-    y = 2*np.arcsin(np.sqrt(np.sin((glxy.theta-x.theta)/2.0)**2.0 + np.sin(glxy.theta)*np.sin(x.theta)*np.sin((glxy.phi - x.phi)/2.0)**2.0))
+    y = 2*math.asin(math.sqrt(math.sin((glxy.theta-x.theta)/2.0)**2.0 + math.sin(glxy.theta)*math.sin(x.theta)*math.sin((glxy.phi - x.phi)/2.0)**2.0))
     havtheta = np.float128(y)
     return havtheta
     
@@ -766,7 +766,7 @@ def prob_linking_length(g1, g2, perpll, losll, Pth, return_val=False):
     #val2 = quad(I, g1.cz/c -3 * g1.czerr/c, g1.cz/c + 3*g1.czerr/c)
     #val3 = quad(I, g1.cz/c + 3*g1.czerr/c, np.inf)
 
-    val = quad(I, 0, 100, points=np.float64([g1.cz/c-5*g1.czerr/c,g1.cz/c-3*g1.czerr/c, g1.cz/c, g1.cz/c+3*g1.czerr/c, g1.cz/c+5*g1.czerr/c]))
+    val = quad(I, 0, 100, points=np.float64([g1.cz/c-5*g1.czerr/c,g1.cz/c-3*g1.czerr/c, g1.cz/c, g1.cz/c+3*g1.czerr/c, g1.cz/c+5*g1.czerr/c]), weight='cauchy', wvar=g1.cz/c)
     val = val[0]
     #print(val)
     if return_val: 
@@ -883,11 +883,10 @@ def largerof(a, b):
 
 
 
-def faint_assoc(idgxs, faintgxs, grpids, rvir, vdisp, losll, ret_groups=True):
+def faint_assoc(idgxs, faintgxs, grpids, radius_boundary, vel_boundary, losll, ret_groups=True, use_linking_length=False):
     """
     ----------
-    Associate faint galaxies below a specified floor back into groups on the condition of
-    Eckert et al. (2016). This algorithm will search for faint galaxies that can be associated to
+    Associate faint galaxies below a specified floor into FoF groups. This algorithm will search for faint galaxies that can be associated to
     friends-of-friends dark matter halos, storing this information to a property `foftools.galaxy.assoc.`
     The current key for this parameter is:
         1   faint galaxy, associated to a FoF halo.
@@ -898,10 +897,14 @@ def faint_assoc(idgxs, faintgxs, grpids, rvir, vdisp, losll, ret_groups=True):
     Arguments:
         idgxs (iterable; elements: type galaxy) galaxies with identified group numbers, to be associated against.
         faintgxs (iterable; elements: type galaxy) list of galaxies that are fainter than the magnitude floor.
-        grpids (iterable; elements: int) list of grpids output from HAM.
-        rvir (iterable, elements: float) virial radii from HAM
-        sigma (iterable, elements: float) velocity dispersion from HAM
+        grpids (iterable; elements: int) if HAM was performed, grpids is the list of HAM-outputted group ID's. Otherwise use group ID's of input idgxs.
+        radius_boundary (iterable; elements: float) on-sky boundaries within which to associate faint galaxies.
+        vel_boundary (iterable; elemenets: float) line-of-sight boundaries within which to associate faint galaxies.
         losll (float or callable): line-of-sight linking length in Mpc/h
+        ret_groups (bool, default True): if True, return the output as a list of groups with faint galaxies associated.
+        use_linking_length (bool, default False): if True, use both velocity boundary and linking length to associate galaxies
+            in the line-of-sight direction -- galaxies will be associated if their peculiar velocity lies within the larger of the velocity boundary or
+            LOS linking length (see Eckert+17).
     Returns:
         GROUPS (iterable, elements: type group): groups with faint galaxies associated.
     ----------
@@ -924,7 +927,7 @@ def faint_assoc(idgxs, faintgxs, grpids, rvir, vdisp, losll, ret_groups=True):
     
     for i,idv in enumerate(grpids):
         grp = find_group(idtargets, idv)
-        Vdisp = vdisp[i]
+        Vdisp = vel_boundary[i]
         
         cra, cdec = grp.get_skycoords()
         grpcenterfake = galaxy(name='grpcenter', ra=cra, dec=cdec, cz=grp.get_cen_cz(), mag=grp.get_total_mag())
@@ -932,12 +935,12 @@ def faint_assoc(idgxs, faintgxs, grpids, rvir, vdisp, losll, ret_groups=True):
         for fg in fainttargets:
             Rp = d_perp(grpcenterfake, fg)
             DeltaV = (fg.cz - grpcenterfake.cz)
-            tempratio = Rp/rvir[i]
-            condition = ((tempratio < 1) and (DeltaV < largerof(losllf(grpcenterfake.cz/c)*cosmo.H(grpcenterfake.cz/c).value, 3*Vdisp)))
+            tempratio = Rp/radius_boundary[i]
+            if use_linking_length:
+                condition = ((tempratio < 1) and (DeltaV < largerof(losllf(grpcenterfake.cz/c)*cosmo.H(grpcenterfake.cz/c).value, Vdisp)))
+            else:
+                condition = ((tempratio < 1) and (DeltaV < Vdisp))
             
-            if fg.name=='rf0691' and idv==46:
-                pass
-                #print(tempratio, DeltaV, 3*Vdisp, losll*100, condition)
             
             if condition and (fg.assoc):
                 # this means that two groups are competing for a galaxy.

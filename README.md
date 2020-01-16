@@ -6,8 +6,8 @@ This package was written to include a variety of computational tools for perform
 ## Using foftools
 There are four key pieces of code in the package:
 1. the `fof.galaxy` class, for storing galaxies and their properties and associated methods
-2. the `fof.galaxy_fof` function, an implementation of the friends-of-friends algorithm for a list of galaxies.
-3. the `fof.prob_fof` function, an implementation of the probability friends-of-friends algorithm for a list of galaxies.
+2. the `fof.fast_fof` function, an implementation of the friends-of-friends algorithm.
+3. the `fof.fast_pfof` function, an implementation of the probability friends-of-friends algorithm.
 4. the `fof.group` class, for storing groups and their properties and associated methods
 
 
@@ -16,7 +16,7 @@ The galaxies class allows for the storing of entire galaxies and their propertie
 Suppose we have a galaxy `test01` with RA and declination (51, 28) degrees, and with absolute magnitude -18.0 and redshift 5000 km/s. We can then initialize the galaxy to `x` as
 ```
 import foftools as fof
-x = fof.galaxy("test01", 51, 28, 5000, -18.0)
+x = fof.galaxy("test01", 51, -29, 5000, -18.0)
 ```
 
 The FOF algorithm is sensitive to RA and declination values, so we encourage users to implement higher-precision coordinate values for group-finding purposes. With the class instance, we can also pass a boolean flag to each galaxy for various purposes under the property `fof.galaxy.fl`. The group ID number for a galaxy defaults to zero, as it assumes that galaxies have not yet been sorted into groups, but this can also be initialized through the `fof.galaxy.groupID` property. The initialization attributes are:
@@ -46,15 +46,17 @@ The galaxy class also includes the following methods:
 - `fof.galaxy.get_logMbary()`: return the galaxy's logarithmic baryonic mass (gas + stellar mass). To use this, you will need to have provided values to the `galaxy.logMstar` and `galaxy.logMgas` attributes.
 
 ### The Friends-of-Friends Algorithm
-We sort groups of galaxies following the process described in Berlind et al. (2006). In this approach, two galaxies are considered friends if the perpendicular and line-of-sight comoving distances between them are each less than a characteristic linking length. The perpendicular and line-of-sight linking lengths are products of the mean separation between galaxies with the perpendicular and line-of-sight linking faictors.
+We sort groups of galaxies following the process described in Berlind et al. (2006). In this approach, two galaxies are considered friends if the perpendicular and line-of-sight comoving distances between them are each less than a characteristic linking length. The perpendicular and line-of-sight linking lengths are products of the mean separation between galaxies with the perpendicular and line-of-sight linking factors.
 
 The choice of linking factor is dependent on survey and can be optimized for different statistical purposes. For example, a flux-limited galaxy survey may require linking factors that are redshift-dependent (cf. Liu et al. 2008). However, since RESOLVE and ECO are volume-limited, our code is written to assume the linking factors to be completely constant. However, the `foftools` module can be easily modified to meet other purposes.
 
-Our implementation of the FoF algorithm is the `fof.galaxy_fof` function. It can be called as
+Our implementation of the FoF algorithm is the `fof.fast_fof` function. It can be called as
 ```
-fof.galaxy_fof(gxs, bperp, blos, s)
+fof.fast_fof(ra, dec, cz, bperp, blos, s)
 ```
-where `bperp` is the perpendicular linking factor, `blos` is the line-of-sight linking factor, and `s` is the mean separation, each as described above. The argument `gxs` is a list of galaxies (instances of the `fof.galaxy` class) on which to perform the group-finding. **Therefore, the `gxs` array must be prepared in advance of using the FoF algorithm to meet the luminosity-floor and bounding redshift values required by the sample.** The function returns nothing; instead, it identifies unique groups of galaxies and assigns each galaxy the appropriate group ID number. Afterwards, it distinguishes those galaxies that were not found to be in nonsingular groups and gives them a unique ID number. These are called "single-galaxy groups." After the code is finished, it will print a confirmation, and each galaxy in `gxs` will have a non-zero group ID number.
+Here `ra`, `dec`, and `cz` are iterables that represent the coordinates of galaxies to be included in the group-finding. The `bperp` and `blos` parametersare the dimensionless linking factors that optimize the mean separation between galaxies, `s`, to identify groups. The `fast_fof` function will return a NumPy array containing a group identification number for every input galaxy. This can be converted into a sequence of galaxy objects using the `fof.arrays_to_galaxies` function.
+
+*The previously used `foftools.galaxy_fof` function is now deprecated.* This algorithm is completely vectorized using NumPy broadcasting, providing enormous performance gains over the previous version. 
 
 **Note: The FoF algorithm will run helper functions for calculating the perpendicular and line-of-sight comoving distances between galaxies. The `foftools` package defaults to a LambdaCDM cosmology with H0 = 100.0, OmegaM = 0.3, and OmegaDE = 0.7. These can be modified in the source.**
 
@@ -62,11 +64,9 @@ where `bperp` is the perpendicular linking factor, `blos` is the line-of-sight l
 
 The package includes an implementation of the probability friends-of-friends algorithm (Liu et al. 2008) for volume-limited data sets. This algorithm presents a modification to the traditional friends-of-friends linking criteria. In PFoF, galaxies are modeled with probability distribution functions, and satisfaction of the line-of-sight linking criterion is given probabilistically. Our implementation models the galaxy PDFs with Gaussian distributions whose centroids are the galaxies' measured redshifts and whose standard deviations are the errorbars on the galaxies' redshifts. Thus, each galaxy to be grouped needs to have its `galaxy.czerr` attribute defined. The routine can be called from
 ```
-fof.prob_fof(gxs, bperp, blos, s, pth)
+fof.prob_fof(ra, dec, cz, czerr, perpll, losll, Pth)
 ``` 
-where `gxs` is a list of galaxy instances with redshift errorbars, `bperp` is the perpendicular linking constant, `blos` is the line-of-sight linking constant, and `s` is the mean separation between targets in the volume-limited data set. The additional argument `pth` is a threshold or "cutoff" probability that is used to determine whether the friendship probability between a pair of galaxies is sufficient for group membership. 
-
-This function is written in the same conventions as `fof.galaxy_fof(...)`. That is, it resets all galaxies to have group ID, and, in determining the groups, will set each galaxy's group ID (`fof.galaxy.groupID`) to the appropriate value. Single galaxy-groups are given their own unique, nonzero group ID number.
+This function follows the same input scheme as `foftools.fast_fof`, but requires an additional input array `czerr` that represents the error bars on individual galaxy redshift velocities. The `perpll` and `losll` are the on-sky and line-of-sight linking lengths in Mpc/h and km/s respectively. The last parameter, `Pth`, is the threshold probability used to construct to a group catalog from PFoF's friendship probabilities.
 
 ### Groups
 

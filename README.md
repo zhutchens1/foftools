@@ -13,7 +13,7 @@ There are four key pieces of code in the package:
 
 ### Galaxies
 The galaxies class allows for the storing of entire galaxies and their properties into a single data type.
-Suppose we have a galaxy `test01` with RA and declination (51, 28) degrees, and with absolute magnitude -18.0 and redshift 5000 km/s. We can then initialize the galaxy to `x` as
+Suppose we have a galaxy `test01` with RA and declination (51, -29) degrees, and with absolute magnitude -18.0 and redshift 5000 km/s. We can then initialize the galaxy to `x` as
 ```
 import foftools as fof
 x = fof.galaxy("test01", 51, -29, 5000, -18.0)

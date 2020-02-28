@@ -26,7 +26,7 @@ from time import clock
 import warnings
 from numba import njit
 
-__versioninfo__ = "FoFtools version 3.2 16 Jan 2020"
+__versioninfo__ = "FoFtools version 3.3 28 Feb  2020"
 
 from astropy.cosmology import LambdaCDM
 cosmo = LambdaCDM(H0=100.0, Om0=0.3, Ode0=0.7) # this puts everything in "per h" units.
@@ -545,7 +545,7 @@ def gauss(x, mu, sigma):
 @njit
 def pfof_integral(z, czi, czerri, czj, czerrj, VL):
     c=SPEED_OF_LIGHT
-    return gauss(z, czi/c, czerri/c) * (0.5*erf((z+VL-czj/c)/((2**0.5)*czerrj/c)) - 0.5*erf((z-VL-czj/c)/((2**0.5)*czerrj/c)))
+    return gauss(z, czi/c, czerri/c) * (0.5*math.erf((z+VL-czj/c)/((2**0.5)*czerrj/c)) - 0.5*math.erf((z-VL-czj/c)/((2**0.5)*czerrj/c)))
 
 
 def fast_pfof(ra, dec, cz, czerr, perpll, losll, Pth, printConf=True):
@@ -1025,26 +1025,27 @@ def faint_assoc(idgxs, faintgxs, grpids, radius_boundary, vel_boundary, losll, r
         Vdisp = vel_boundary[i]
         
         cra, cdec = grp.get_skycoords()
-        grpcenterfake = galaxy(name='grpcenter', ra=cra, dec=cdec, cz=grp.get_cen_cz(), mag=grp.get_total_mag())
+        grpcenterfake = galaxy(name='grpcenter', ra=cra, dec=cdec, cz=grp.get_cen_cz(), mag=-99)
         
         for fg in fainttargets:
             Rp = d_perp(grpcenterfake, fg)
-            DeltaV = (fg.cz - grpcenterfake.cz)
+            DeltaV = np.abs(fg.cz - grpcenterfake.cz)
+
             tempratio = Rp/radius_boundary[i]
             if use_linking_length:
                 condition = ((tempratio < 1) and (DeltaV < largerof(losllf(grpcenterfake.cz/c)*cosmo.H(grpcenterfake.cz/c).value, Vdisp)))
             else:
                 condition = ((tempratio < 1) and (DeltaV < Vdisp))
             
-            
             if condition and (fg.assoc):
                 # this means that two groups are competing for a galaxy.
                 if tempratio < fg.radiusratio:
-                    fg.radisratio = tempratio
+                    fg.radiusratio = tempratio
                     fg.set_groupID(idv)
                     fg.assoc=1
                 else:
                     pass
+
                     
             elif condition and (not fg.assoc):
                 fg.radiusratio = tempratio

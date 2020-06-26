@@ -214,9 +214,14 @@ class group(object):
     
     def get_skycoords(self):
         """ 
-        Get the cental sky spherical-polar coordinates  of the group.
+        Get the right-acesnsion and declination of galaxy group's center.
         Arguments: None
         Returns: tuple containing phi, theta values in degrees
+
+        Note: the FoF code of AA Berlind uses theta_i = declination, with theta_cen = 
+        the central declination. This version uses theta_i = pi/2-dec, with some trig functions
+        changed so that the output *matches* that of Berlind's FoF code (my "deccen" is the same as
+        his "thetacen", to be exact.)
         """
         xcen = 0.
         ycen = 0.
@@ -231,7 +236,7 @@ class group(object):
         
         czcen = np.sqrt(xcen**2 + ycen**2 + zcen**2)
         
-        thetacen = np.arcsin(zcen/czcen)*(180.0/np.pi)
+        deccen = np.arcsin(zcen/czcen)*(180.0/np.pi)
         
         if (ycen >=0 and xcen >=0):
             phicor = 0.0
@@ -246,7 +251,7 @@ class group(object):
             
         phicen = np.arctan(ycen/xcen)*(180.0/np.pi) + phicor
         
-        return (phicen, thetacen) # in degrees
+        return (phicen, deccen) # in degrees
     
     
     def get_cen_cz(self):
@@ -477,7 +482,7 @@ def in_same_group(g1, g2):
 def fast_fof(ra, dec, cz, bperp, blos, s, printConf=True):
     """
     -----------
-    Compute group membership from galactic coordinates using a friends-of-friends algorithm,
+    Compute group membership from galaxies' equatorial coordinates using a friends-of-friends algorithm,
     based on the method of Berlind et al. 2006. This algorithm is designed to identify groups
     in volume-limited catalogs down to a common magnitude floor. All input arrays (RA, Dec, cz)
     must have already been selected to be above the group-finding floor.

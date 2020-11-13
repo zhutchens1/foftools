@@ -65,6 +65,13 @@ def fast_fof(ra, dec, cz, bperp, blos, s, printConf=True):
     cz = np.float64(cz)
     assert (len(ra)==len(dec) and len(dec)==len(cz)),"RA/Dec/cz arrays must equivalent length."
 
+    #check if s is adaptive or fixed
+    if np.isscalar(s):
+        adaptive=False
+    else:
+        adaptive=True
+        s = np.float64(s)[:,None] # convert to column vector
+
     phi = (ra * np.pi/180.)
     theta =(np.pi/2. - dec*(np.pi/180.))
     transv_cmvgdist = (cosmo.comoving_transverse_distance(cz/SPEED_OF_LIGHT).value)
@@ -83,15 +90,22 @@ def fast_fof(ra, dec, cz, bperp, blos, s, printConf=True):
     # Compute line-of-sight distances
     dlos = np.abs(los_cmvgdist - los_cmvgdist[:, None])
     
-    # Compute friendship
-    index = np.where(np.logical_and(dlos<=blos*s, dperp<=bperp*s))
-    friendship[index]=1
-    assert np.all(np.abs(friendship-friendship.T) < 1e-8), "Friendship matrix must be symmetric."
+    # Compute friendship - fixed case
+    if not adaptive:
+        index = np.where(np.logical_and(dlos<=blos*s, dperp<=bperp*s))
+        friendship[index]=1
+        assert np.all(np.abs(friendship-friendship.T) < 1e-8), "Friendship matrix must be symmetric."
     
-    if printConf:
-        print('FoF complete in {a:0.4f} s'.format(a=clock()-t1))
-    return collapse_friendship_matrix(friendship)
+        if printConf:
+            print('FoF complete in {a:0.4f} s'.format(a=clock()-t1))
+    # compute friendship - adaptive case
+    elif adaptive:
+        index = np.where(np.logical_and(dlos-blos*s<=0, dperp-bperp*s<=0))
+        friendship[index]=1
+        if printConf:
+            print('FoF complete in {a:0.4f} s'.format(a=clock()-t1))        
 
+    return collapse_friendship_matrix(friendship)
 
 
 # -------------------------------------------------------------- #

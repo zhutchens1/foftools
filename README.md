@@ -7,18 +7,16 @@ This package was written to include a variety of computational tools for perform
 There are two key functions  in the package:
 1. the `fof.fast_fof` function, an implementation of the friends-of-friends algorithm (Huchra & Geller, 1982; Berlind et al. 2006).
 2. the `fof.fast_pfof` function, an implementation of the probability friends-of-friends algorithm (Liu et al. 2009).
+The library also includes a number of functions for computing the properties of the groups, such as their multiplicities, radii or velocity dispersions, and total masses.
 
 ### The Friends-of-Friends Algorithm
-We sort galaxe following the process described in Berlind et al. (2006). In this approach, two galaxies are considered friends if the perpendicular and line-of-sight comoving distances between them are each less than a characteristic linking length. The perpendicular and line-of-sight linking lengths are products of the mean separation between galaxies with the perpendicular and line-of-sight linking constants. Application of this algorithm requires computing transverse sky-distances between galaxies
-
-The choice of linking constant is dependent on survey setup and scientific goals. As in Eckert et al. (2017), groups identified in the RESOLVE and ECO surveys use linking constants that are optimized for the study of galaxy environment, `bperp=0.07` and `blos=1.1`, as in Duarte & Mamon (2014).
+Our FoF code works by following the process described in Berlind et al. (2006). In this approach, two galaxies are considered friends if the perpendicular and line-of-sight comoving distances between them are each less than a characteristic linking length. The perpendicular and line-of-sight linking lengths are products of the mean separation between galaxies with the perpendicular and line-of-sight linking constants. In general, linking lengths are optimized with mock catalogs, but Duarte & Mamon (2014) provide several recommendations for different scientific purposes.
 
 Our implementation of the FoF algorithm is the `fof.fast_fof` function. It can be called as:
 ```
 fof.fast_fof(ra, dec, cz, bperp, blos, s)
 ```
-Here `ra`, `dec`, and `cz` are iterables that represent the coordinates of galaxies to be included in the group-finding. The `bperp` and `blos` parametersare the dimensionless linking factors that optimize the mean separation between galaxies, `s`, to identify groups. The `fast_fof` function will return a NumPy array containing a group identification number for every input galaxy.
-
+Here `ra`, `dec`, and `cz` are iterables that represent the coordinates of galaxies to be included in the group-finding. The `bperp` and `blos` parameters are the dimensionless linking factors that optimize the mean separation between galaxies, `s`, to identify groups. The `fast_fof` function will return a NumPy array containing a group identification number for every input galaxy. The algorithm will also accept `s` as an iterable of equivalent length as `ra`.
 
 **Note: The FoF algorithm will run helper functions for calculating the perpendicular and line-of-sight comoving distances between galaxies. The `foftools` package defaults to a LambdaCDM cosmology with H0 = 100.0, OmegaM = 0.3, and OmegaDE = 0.7. These can be modified in the source.**
 
@@ -32,10 +30,3 @@ This function follows the same input scheme as `foftools.fast_fof`, but requires
 
 The PFoF algorithm is very computationally-expensive; the supporting functions require Numba's `@njit` decorator to improve integration speed for galaxy friendship probabilities.
 
-
-## References
-- Kannappan, Sheila, et al. "The RESOLVE Survey: REsolved Spectroscopy Of a Local VolumE." Bulletin of the American Astronomical Society. Vol. 43. 2011.
-- Moffett, Amanda J., et al. "ECO and RESOLVE: Galaxy Disk Growth in Environmental Context." The Astrophysical Journal 812.2 (2015): 89.
-- Eckert, Kathleen D., et al. "RESOLVE and ECO: The Halo Mass-dependent Shape of Galaxy Stellar and Baryonic Mass Functions." The Astrophysical Journal 824.2 (2016): 124.
-- Berlind, Andreas A., et al. "Percolation galaxy groups and clusters in the SDSS redshift survey: identification, catalogs, and the multiplicity function." The Astrophysical Journal Supplement Series 167.1 (2006): 1.
-- Liu, Hauyu Baobab, et al. "A new galaxy group finding algorithm: Probability friends-of-friends." The Astrophysical Journal 681.2 (2008): 1046.

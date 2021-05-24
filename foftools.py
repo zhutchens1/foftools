@@ -20,10 +20,11 @@ import numpy as np
 import pandas as pd
 import itertools
 from scipy.integrate import quad
+from scipy.interpolate import interp1d
 from math import erf
 from copy import deepcopy
 import math
-from time import clock
+import time
 import warnings
 from numba import njit
 
@@ -58,7 +59,7 @@ def fast_fof(ra, dec, cz, bperp, blos, s, printConf=True):
                 The list will have shape len(ra).
     -----------
     """
-    t1 = clock()
+    t1 = time.time()
     Ngalaxies = len(ra)
     ra = np.float64(ra)
     dec = np.float64(dec)
@@ -97,13 +98,13 @@ def fast_fof(ra, dec, cz, bperp, blos, s, printConf=True):
         assert np.all(np.abs(friendship-friendship.T) < 1e-8), "Friendship matrix must be symmetric."
     
         if printConf:
-            print('FoF complete in {a:0.4f} s'.format(a=clock()-t1))
+            print('FoF complete in {a:0.4f} s'.format(a=time.time()-t1))
     # compute friendship - adaptive case
     elif adaptive:
         index = np.where(np.logical_and(dlos-blos*s<=0, dperp-bperp*s<=0))
         friendship[index]=1
         if printConf:
-            print('FoF complete in {a:0.4f} s'.format(a=clock()-t1))        
+            print('FoF complete in {a:0.4f} s'.format(a=time.time()-t1))        
 
     return collapse_friendship_matrix(friendship)
 
@@ -155,7 +156,7 @@ def fast_pfof(ra, dec, cz, czerr, perpll, losll, Pth, printConf=True):
     -----
     """
     print('you know.... you could speed this up more if check for transverse friendship before integrating...')
-    t1 = clock()
+    t1 = time.time()
     Ngalaxies = len(ra)
     ra = np.float32(ra)
     dec = np.float32(dec)
@@ -196,7 +197,7 @@ def fast_pfof(ra, dec, cz, czerr, perpll, losll, Pth, printConf=True):
     assert np.all(np.abs(friendship-friendship.T) < 1e-8), "Friendship matrix must be symmetric."
     
     if printConf:
-        print('PFoF complete in {a:0.4f} s'.format(a=clock()-t1))
+        print('PFoF complete in {a:0.4f} s'.format(a=time.time()-t1))
     return collapse_friendship_matrix(friendship)
 
 
@@ -337,7 +338,7 @@ def fast_faint_assoc(faintra, faintdec, faintcz, grpra, grpdec, grpcz, grpid, ra
     grp_cmvg = cosmo.comoving_transverse_distance(grpcz/SPEED_OF_LIGHT).value
 
     half_angle = np.arcsin((np.sin((fainttheta-grptheta)/2.0)**2.0 + np.sin(fainttheta)*np.sin(grptheta)*np.sin((faintphi-grpphi)/2.0)**2.0)**0.5)
-    Rp = (faint_cmvg + grp_cmvg) * (half_angle)
+    Rp = (faint_cmvg + grp_cmvg) * np.sin(half_angle)
     DeltaV = np.abs(faintcz[:,None] - grpcz)
 
     for gg in range(0,len(grpid)):
@@ -436,7 +437,7 @@ def group_skycoords(galaxyra, galaxydec, galaxycz, galaxygrpid):
     return groupra, groupdec, groupcz
 
 
-def get_rproj_czdisp(galaxyra, galaxydec, galaxycz, galaxygrpid):
+def get_rproj_czdisp(galaxyra, galaxydec, galaxycz, galaxygrpid, HUBBLE_CONST=70.):
     """
     Compute the observational projected radius, in Mpc/h, and the observational
     velocity dispersion, in km/s, for a galaxy group catalog. Input should match
@@ -521,3 +522,177 @@ def multiplicity_function(grpids, return_by_galaxy=False):
             sel = np.where(grpids==uid)
             occurences.append(len(grpids[sel]))
         return occurences
+
+
+def get_grprproj_e17(galra, galdec, galcz, galgrpid, h):
+    """
+    Credit: Ella Castelloe for original python code 
+    Compute the observational group projected radius from Eckert et al. (2017). Adapted from
+    Katie's IDL code, which was used to calculate grprproj for FoF groups in RESOLVE.
+    75% radius of all members
+
+    Parameters
+    --------------------
+    galra : iterable
+       RA of input galaxies in decimal degrees
+    galdec : iterable
+       Declination of input galaxies in decimal degrees
+    galcz : iterable
+       Observed local group-corrected radial velocities of input galaxies (km/s)
+    galgrpid : iterable
+       Group ID numbers for input galaxies, length matches `galra`.
+
+    Returns
+    --------------------
+    grprproj : np.array
+        Group projected radii in Mpc/h, length matches `galra`.
+
+    """
+    rproj75dist = np.zeros(len(galgrpid))
+    uniqgrpid = np.unique(galgrpid)
+    for uid in uniqgrpid:
+        galsel = np.where(galgrpid==uid)
+        if len(galsel[0])> 2:
+            ras = np.array(galra[galsel])*np.pi/180 #in radians
+            decs = np.array(galdec[galsel])*np.pi/180 #in radians
+            czs = np.array(galcz[galsel])
+            grpn = len(galsel[0]) 
+            H0 = 100*h #km/s/Mpc
+            grpdec = np.mean(decs)
+            grpra = np.mean(ras)
+            grpcz = np.mean(czs)
+            theta = 2*np.arcsin(np.sqrt((np.sin((decs-grpdec)/2))**2 + np.cos(decs)*np.cos(grpdec)*(np.sin((ras-grpra)/2)**2)))
+            theta = np.array(theta)
+            rproj = theta*grpcz/H0
+            sortorder = np.argsort(rproj)
+            rprojsrt_y = rproj[sortorder]
+            rprojval_x = np.arange(0 , grpn)/(grpn-1.) #array from 0 to 1, use for interpolation
+            #print(rprojsrt, rprojval, grpn)
+            f = interp1d(rprojval_x, rprojsrt_y) 
+            rproj75val = f(0.75)
+        else:
+            rproj75val = 0.0
+            #rprojval_x = 0.0
+            #rprojsrt_y = 0.0
+        rproj75dist[galsel]=rproj75val
+    return rproj75dist
+
+def getmhoffset(delta1, delta2, borc1, borc2, cc):
+    """
+    Credit: Ella Castelloe & Katie Eckert
+    Adapted from Katie's code, using eqns from "Sample Variance Considerations for Cluster Surveys," Hu & Kravtsov (2003) ApJ, 584, 702
+    (astro-ph/0203169)
+    delta1 is overdensity of input, delta2 is overdensity of output -- for mock, delta1 = 200
+    borc = 1 if wrt background density, borc = 0 if wrt critical density
+    cc is concentration of halo- use cc=6
+    """
+    if borc1 == 0:
+        delta1 = delta1/0.3
+    if borc2 == 0:
+        delta2 = delta2/0.3
+    xin = 1./cc
+    f_1overc = (xin)**3. * (np.log(1. + (1./xin)) - (1. + xin)**(-1.))
+    f1 = delta1/delta2 * f_1overc
+    a1=0.5116
+    a2=-0.4283
+    a3=-3.13e-3
+    a4=-3.52e-5
+    p = a2 + a3*np.log(f1) + a4*(np.log(f1))**2.
+    x_f1 = (a1*f1**(2.*p) + (3./4.)**2.)**(-1./2.) + 2.*f1
+    r2overr1 = x_f1
+    m1overm2 = (delta1/delta2) * (1./r2overr1)**3. * (1./cc)**3.
+    return m1overm2
+
+def get_central_flag(galquantity, galgrpid):
+    """
+    Produce 1/0 flag indicating central/satellite for a galaxy
+    group dataset.
+
+    Parameters
+    -------------------
+    galquantity : np.array
+       Quantity by which to select centrals. If (galquantity>0).all(), the central is taken as the maximum galquantity in each group.
+       If (galquantity<0).all(), the quantity is assumed to be an abs. magnitude, and the central is the minimum quanity in each group.
+    galgrpid : np.array
+       Group ID number for each galaxy.
+
+    Returns
+    -------------------
+    cflag : np.array
+       1/0 flag indicating central/satellite status.
+    """
+    cflag = np.zeros(len(galquantity))
+    uniqgrpid = np.unique(galgrpid)
+    if ((galquantity>-1).all()):
+       centralfn = np.max
+    if ((galquantity<0).all()):
+       centralfn = np.min
+    for uid in uniqgrpid:
+        galsel = np.where(galgrpid==uid)
+        centralmass = centralfn(galquantity[galsel])
+        centralsel = np.where((galgrpid==uid) & (galquantity==centralmass))
+        cflag[centralsel]=1.
+        satsel = np.where((galgrpid==uid) & (galquantity!=centralmass))
+        cflag[satsel]=0.
+    return cflag
+
+
+def get_outermost_galradius(galra, galdec, galcz, galgrpid):
+    """
+    Get the radius, in arcseconds, to the outermost gruop galaxy.
+    
+    Parameters
+    -------------------
+    galra : np.array
+        RA in decimal degrees of grouped galaxies.
+    galdec : np.array
+        Dec in decimal degrees of grouped galaxies.
+    galgrprpid : np.array
+        Group ID number of input galaxies.
+
+    Returns
+    --------------------
+    radius : np.array
+        Radius to outermost member of galaxy's group (length = # galaxies = len(galra)). Units: arcseconds.
+    """
+    radius = np.zeros(len(galra))
+    grpra, grpdec, grpcz = group_skycoords(galra, galdec, galcz, galgrpid)
+    #angsep = angular_separation(galra, galdec, grpra, grpdec)  # arcsec
+    angsep = np.sqrt((grpra-galra)**2. + (grpdec-galdec)**2.)*(np.pi/180.)
+    rproj = (galcz+grpcz)/70. * np.sin(angsep/2.)
+    for uid in np.unique(galgrpid):
+        galsel = np.where(galgrpid==uid)
+        radius[galsel] = np.max(angsep[galsel])
+        #radius[galsel] = np.max(rproj[galsel])
+    #return radius*206265/(grpcz/70.)
+    return radius*206265
+
+def angular_separation(ra1,dec1,ra2,dec2):
+    """
+    Compute the angular separation bewteen two lists of galaxies using the Haversine formula.
+    
+    Parameters
+    ------------
+    ra1, dec1, ra2, dec2 : array-like
+       Lists of right-ascension and declination values for input targets, in decimal degrees. 
+    
+    Returns
+    ------------
+    angle : np.array
+       Array containing the angular separations between coordinates in list #1 and list #2, as above.
+       Return value expressed in radians, NOT decimal degrees.
+    """
+    phi1 = ra1*np.pi/180.
+    phi2 = ra2*np.pi/180.
+    theta1 = np.pi/2. - dec1*np.pi/180.
+    theta2 = np.pi/2. - dec2*np.pi/180.
+    return 2*np.arcsin(np.sqrt(np.sin((theta2-theta1)/2.0)**2.0 + np.sin(theta1)*np.sin(theta2)*np.sin((phi2 - phi1)/2.0)**2.0))
+
+def sepmodel(x, a, b, c, d, e):
+    #return np.abs(a)*np.exp(-1*np.abs(b)*x + c)+d
+    #return a*(x**3)+b*(x**2)+c*x+d
+    return a*(x**4)+b*(x**3)+c*(x**2)+(d*x)+e
+
+def giantmodel(x, a, b):
+    return np.abs(a)*np.log(np.abs(b)*x+1)
+

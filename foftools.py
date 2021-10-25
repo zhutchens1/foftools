@@ -139,7 +139,8 @@ def fast_pfof(ra, dec, cz, czerr, perpll, losll, Pth, printConf=True):
     a variant of FoF (see `foftools.fast_fof`, Berlind+2006), which treats galaxies as Gaussian
     probability distributions, allowing group membership selection to account for the 
     redshift errors of photometric redshift measurements. 
-    
+    In this function, the linking length must be fixed.   
+ 
     Arguments:
         ra (iterable): list of right-ascesnsion coordinates of galaxies in decimal degrees.
         dec (iterable): list of declination coordinates of galaxies in decimal degrees.
@@ -155,7 +156,6 @@ def fast_pfof(ra, dec, cz, czerr, perpll, losll, Pth, printConf=True):
                 The list will have shape len(ra).
     -----
     """
-    print('you know.... you could speed this up more if check for transverse friendship before integrating...')
     t1 = time.time()
     Ngalaxies = len(ra)
     ra = np.float32(ra)
@@ -182,7 +182,7 @@ def fast_pfof(ra, dec, cz, czerr, perpll, losll, Pth, printConf=True):
     VL = losll/c
     for i in range(0,Ngalaxies):
         for j in range(0, i+1):
-            if j<i:
+            if j<i and dperp[i][j]<=perpll:
                 val = quad(pfof_integral, 0, 100, args=(cz[i], czerr[i], cz[j], czerr[j], VL),\
                            points=np.float64([cz[i]/c-5*czerr[i]/c,cz[i]/c-3*czerr[i]/c, cz[i]/c, cz[i]/c+3*czerr[i]/c, cz[i]/c+5*czerr[i]/c]),\
                             wvar=cz[i]/c)

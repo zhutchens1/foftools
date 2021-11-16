@@ -696,3 +696,76 @@ def sepmodel(x, a, b, c, d, e):
 def giantmodel(x, a, b):
     return np.abs(a)*np.log(np.abs(b)*x+1)
 
+
+def flag_edges_2D(ra, dec, grpid, rarange, decrange, R0=0):
+    """
+    Given a group catalog, flag individual groups for 
+    possible spatial incompleteness due to survey edge
+    cutoffs. 
+
+    Note that for surveys whose RA ranges contain the 0/360
+    wrap-around, this must be handled manually before applying
+    this function. In this case, `ra` and `rarange` should be
+    remapped such that high RAs are negative (e.g. RA = 350 
+    would be equivalent to -10).
+
+    Parameters
+    ----------------------
+    ra : array_like
+        Right ascension of each galaxy in decimal degrees.
+    dec : array_like
+        Declination of each galaxy in decimal degrees.
+    grpid : array_like
+        Group ID number for each galaxy.
+    rarange : tuple
+        Two-element tuple containing boundaries for right-ascension.
+    decrange : tuple
+        Two-element tuple containing boundaries for declination.    
+    R0 : scalar
+        Characteristic angular separation by which to determine if
+        groups is near edge (e.g. an FoF spatial linking length).
+        Should be expressed in decimal degrees.
+
+    Returns
+    -----------------------
+    edgeflag : np.array
+        1/0 flag for each galaxy, indicating whether the galaxy's
+        group is potentially contaminated by survey edge effects.
+    """
+    ra=np.asarray(ra)
+    dec=np.asarray(dec)
+    cz=np.asarray(cz)
+    grpid=np.asarray(grpid)
+    ramin, ramax = rarange[0], rarange[1]
+    decmin, decmax = decrange[0], decrange[1]
+    edgeflag=np.zeros_like(grpid).astype(int)
+    # N=1 groups?
+    for uid in np.unique(grpid):
+        grpsel = np.where(grpid==uid)
+        grpra = ra[grpsel]
+        grpdec = dec[grpsel]
+        grpcz = cz[grpcz]
+        # check if any group galaxies outside RA/Dec range
+        outofRArange = (grpra>ramax).any() | (grpra<ramin).any()
+        outofDecrange = (grpdec>decmax).any() | (grpdec<decmin).any()
+        if outofRArange or outofDecrange:
+            edgeflag[grpsel]=1
+        else:
+            # check angular radius to outermost galaxy
+            #grpsep = angular_separation(grpra, grpdec, grpra[:,None], grpdec[:,None])
+            Dright = angular_separation(grpra, grpdec, np.zeros_like(grpra)+ramax, grpdec)
+            Dleft = angular_separation(grpra, grpdec, np.zeros_like(grpra)+ramin, grpdec)
+            Dtop = angular_separation(grpra, grpdec, grpra, np.zeros_like(grpdec)+decmax)
+            Dbottom = angular_separation(grpra, grpdec, grpra, np.zeros_like(grpdec)+decmin)
+            #nearedge = (Dright<grpsep).any() | (Dleft<grpsep).any() | (Dtop<grpsep).any() | (Dbottom<grpsep).any()
+            nearedge = (Dright<R0).any() | (Dleft<R0).any() | (Dtop<R0).any() | (Dbottom<R0).any()
+            edgeflag[grpsel]=int(nearedge)
+    return edgeflag
+
+            
+
+
+
+
+
+

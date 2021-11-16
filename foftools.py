@@ -697,7 +697,7 @@ def giantmodel(x, a, b):
     return np.abs(a)*np.log(np.abs(b)*x+1)
 
 
-def flag_edges_2D(ra, dec, grpid, rarange, decrange, R0=0):
+def flag_edges_2D(ra, dec, grpid, rarange, decrange, R0):
     """
     Given a group catalog, flag individual groups for 
     possible spatial incompleteness due to survey edge
@@ -732,19 +732,17 @@ def flag_edges_2D(ra, dec, grpid, rarange, decrange, R0=0):
         1/0 flag for each galaxy, indicating whether the galaxy's
         group is potentially contaminated by survey edge effects.
     """
+    R0 = R0*np.pi/180. # convert to rad
     ra=np.asarray(ra)
     dec=np.asarray(dec)
-    cz=np.asarray(cz)
     grpid=np.asarray(grpid)
     ramin, ramax = rarange[0], rarange[1]
     decmin, decmax = decrange[0], decrange[1]
     edgeflag=np.zeros_like(grpid).astype(int)
-    # N=1 groups?
     for uid in np.unique(grpid):
         grpsel = np.where(grpid==uid)
         grpra = ra[grpsel]
         grpdec = dec[grpsel]
-        grpcz = cz[grpcz]
         # check if any group galaxies outside RA/Dec range
         outofRArange = (grpra>ramax).any() | (grpra<ramin).any()
         outofDecrange = (grpdec>decmax).any() | (grpdec<decmin).any()

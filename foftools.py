@@ -760,10 +760,45 @@ def flag_edges_2D(ra, dec, grpid, rarange, decrange, R0):
             edgeflag[grpsel]=int(nearedge)
     return edgeflag
 
-            
 
+def dynmass(galra,galdec,galcz,galgrpid,Aval=9.9,h=0.7):
+    """
+    Compute dynamical masses of galaxy groups using the method
+    outlined in Eckert et al. (2017), section 2.3.3. 
 
+    Parameters
+    -----------------
+    galra, galdec, galcz : iterable
+        Arrays containing galaxy coordinates in decimal degrees, km/s.
+    galgrpid : iterable
+        Array containing group ID number for every galaxy.
+    Aval : float
+        Scalar factor for which to scale masses (see E17 discussion).
+        Default 9.9.
+    h : scalar
+        Hubble constant / (100 km/s/Mpc). Default 0.7
 
-
-
+    Returns
+    ------------------
+    mdyn:
+        log dynamical mass of each galaxy's group [solar masses].
+        Galaxies in N<=2 groups are assigned values of 0.
+    """
+    Rproj=get_grprproj_e17(galra, galdec, galcz, galgrpid, h)
+    sigma_squared = np.zeros_like(Rproj)
+    for ii,gg in enumerate(np.unique(galgrpid)):
+        sel = np.where(galgrpid==gg)
+        nn=len(sel[0])
+        if nn>2:
+            ii=np.arange(1,nn+1)
+            weight=ii*(nn-ii)
+            tmp = np.sqrt(np.pi)/(nn*nn-nn) * np.sum(np.diff(np.sort(galcz[sel]))*weight[:-1])
+            sigma_squared[sel]=tmp*tmp
+        else:
+           sigma_squared[sel]=-99.
+    GG = 4.3e-9 # Mpc km^2 s^-2 M_sun^-1
+    mdyn = Aval*sigma_squared*Rproj/GG
+    sel=np.where(galgrpid==881.)
+    mdyn[np.where(mdyn<=0)]=1.
+    return np.log10(mdyn)
 
